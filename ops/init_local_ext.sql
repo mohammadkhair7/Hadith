@@ -1,0 +1,4 @@
+CREATE EXTENSION IF NOT EXISTS age;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS unaccent;
+SELECT extname, extversion FROM pg_extension ORDER BY extname;

@@ -1,0 +1,49 @@
+# --- secrets: never commit env files anywhere in the tree ---
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+
+# --- databases & large data stay local (D: git strategy §14.4) ---
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.pdf
+data/raw/
+dumps/
+
+# --- python ---
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# --- node / frontend ---
+node_modules/
+frontend/dist/
+*.local
+
+# --- ML models & training artifacts (gitignored per §12.9) ---
+Arabic-lib/models/
+Arabic-lib/jars/
+checkpoints/
+runs/
+logs/
+*.onnx
+*.npz
+*.ser
+
+# --- tooling folders not part of the app source ---
+Grammar/
+.idea/
+.vscode/
+
+# --- misc ---
+*.log
+.DS_Store
+Thumbs.db

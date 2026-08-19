@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --islamic-teal: #0d7377;
+  --islamic-gold: #d4af37;
+  --islamic-dark: #1a1a2e;
+  --islamic-light: #f8f9fa;
+  --deep-teal: #14213d;
+  --orange-accent: #fca311;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-islamic-light text-islamic-dark font-ui;
+}
+
+.dark body {
+  @apply bg-islamic-dark text-islamic-light;
+}
+
+.arabic-text {
+  @apply font-arabic leading-loose;
+  font-size: 1.25rem;
+}
+
+mark {
+  @apply bg-islamic-gold/40 text-inherit rounded px-0.5;
+}
+
+/* legacy alifta HTML content */
+.legacy-content table {
+  border-collapse: collapse;
+  margin: 0 auto;
+  max-width: 100%;
+}
+.legacy-content table,
+.legacy-content td,
+.legacy-content th {
+  background-color: transparent !important;
+}
+.legacy-content a {
+  color: var(--islamic-teal);
+}
+
+/* thin scrollbars for the TOC sidebar */
+.toc-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.toc-scroll::-webkit-scrollbar-thumb {
+  background: var(--islamic-teal);
+  border-radius: 3px;
+}

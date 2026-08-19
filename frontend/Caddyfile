@@ -1,0 +1,20 @@
+{
+	admin off
+	auto_https off
+}
+
+:{$PORT:80} {
+	encode gzip
+
+	handle /api/* {
+		# Railway private network (IPv6). BACKEND_INTERNAL_URL is set on the
+		# frontend service, e.g. http://hadith-backend.railway.internal:8080
+		reverse_proxy {$BACKEND_INTERNAL_URL:http://hadith-backend.railway.internal:8080}
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

@@ -1,0 +1,76 @@
+# Semantic view of the AdvancedHadith unified schema (§8.2) — fed into the
+# NL2SQL prompt. Keep in sync with etl/schema.sql.
+description: >
+  قاعدة بيانات موحدة لثلاث مكتبات حديثية: موسوعة السنة (sunna)، أرشيف الإفتاء
+  (alifta)، والمكتبة الشاملة (shamela). النص الكامل في passages؛ كل شيء آخر
+  وصف وتنظيم.
+tables:
+  works:
+    description: الكتاب المجرد (العمل) — قد يكون له عدة طبعات/مصادر
+    columns:
+      work_id: معرف
+      title_ar: عنوان الكتاب بالعربية
+      author_ar: المؤلف
+      kind: "matn (متن حديث) | rijal | sharh | atraf | service | other"
+  editions:
+    description: طبعة/نسخة من كتاب في مصدر معيّن
+    columns:
+      edition_id: معرف
+      work_id: يشير إلى works
+      source: "sunna | alifta | shamela"
+      title_ar: عنوان الطبعة
+      book_type: "matn | service | page-archive"
+      passage_count: عدد النصوص
+  passages:
+    description: وحدة النص (حديث أو صفحة) — الجدول المركزي
+    columns:
+      passage_id: معرف
+      edition_id: يشير إلى editions
+      source: "sunna | alifta | shamela (منسوخ للتصفية)"
+      seq: ترتيب القراءة داخل الطبعة
+      kind: "unit (حديث مفرد) | page (صفحة)"
+      hadith_num: رقم الحديث (نص، قد يحوي نطاقات)
+      part: الجزء المطبوع
+      page: الصفحة المطبوعة
+      text_raw: النص الأصلي بالتشكيل
+      text_norm: النص المطبَّع (بدون تشكيل، الألف موحدة، ة→ه، ى→ي)
+      tsv: "tsvector على text_norm — استخدم @@ websearch_to_tsquery('simple', ...)"
+  toc_nodes:
+    description: فهرس شجري لكل طبعة
+    columns: {toc_node_id: معرف, edition_id: الطبعة, parent_id: الأب, title: العنوان, is_leaf: ورقة, depth: العمق}
+  subjects:
+    description: شجرة الموضوعات الفقهية/الحديثية الموحدة
+    columns: {subject_id: معرف, parent_id: الأب, title: العنوان, title_norm: مطبَّع}
+  subject_links:
+    description: ربط موضوع ↔ نص (passage)
+    columns: {subject_id: الموضوع, passage_id: النص, ord: الترتيب}
+  narrators:
+    description: رجال الحديث (يملأ في مرحلة لاحقة — قد يكون فارغاً)
+    columns: {narrator_id: معرف, canonical_ar: الاسم, generation: الطبقة, death_year_h: سنة الوفاة هجري}
+  translations:
+    description: ترجمات النصوص والعناوين
+    columns: {obj_type: النوع, obj_id: المعرف, lang: اللغة, text: الترجمة, status: الحالة}
+joins:
+  - passages.edition_id = editions.edition_id
+  - editions.work_id = works.work_id
+  - subject_links.passage_id = passages.passage_id
+  - subject_links.subject_id = subjects.subject_id
+  - passages.toc_node_id = toc_nodes.toc_node_id
+notes:
+  - استخدم text_norm للمطابقة النصية دائماً (المستخدم قد يكتب بلا تشكيل)
+  - "counts: استخدم count(*) مع GROUP BY، ورتّب تنازلياً عند 'الأكثر/الأعلى'"
+  - hadith_num نص وليس رقماً — استخدم المقارنة النصية أو التحويل الآمن
+  - أضف LIMIT دائماً (سيُفرض 200 كحد أقصى)
+examples:
+  - q: كم عدد الأحاديث في صحيح البخاري؟
+    sql: >
+      SELECT count(*) FROM passages p JOIN editions e USING (edition_id)
+      JOIN works w USING (work_id)
+      WHERE w.title_norm LIKE '%صحيح البخاري%' AND p.kind='unit' AND p.source='sunna' LIMIT 1
+  - q: ما أكثر عشرة موضوعات ارتباطاً بالأحاديث؟
+    sql: >
+      SELECT s.title, count(*) AS n FROM subject_links sl JOIN subjects s USING (subject_id)
+      GROUP BY s.title ORDER BY n DESC LIMIT 10
+  - q: كم كتاباً في كل مصدر؟
+    sql: >
+      SELECT source, count(*) AS editions FROM editions GROUP BY source ORDER BY editions DESC LIMIT 10
