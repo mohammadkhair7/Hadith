@@ -2,7 +2,9 @@
 FROM node:22-alpine AS build
 WORKDIR /src
 COPY package.json package-lock.json ./
-RUN npm ci
+# npm install rather than npm ci: the lockfile is written by npm 11 and
+# npm 10 inside this image rejects its picomatch dedupe layout
+RUN npm install --no-audit --no-fund
 COPY . .
 RUN npm run build
 
