@@ -54,13 +54,17 @@ function Stat({ n, label }: { n: number; label: string }) {
 }
 
 function Collection({ title, works, accent }: { title: string; works: Work[]; accent: string }) {
+  const { t } = useTranslation();
   if (!works.length) return null;
   return (
     <section className="mb-8">
       <h2 className={`text-xl font-bold mb-4 border-s-4 ${accent} ps-3`}>{title}</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {works.map((w) => {
-          const main = w.editions.find((e) => e.source === "sunna") || w.editions[0];
+          const main =
+            w.editions.find((e) => e.source === "sunna" && (e.passage_count || 0) > 0) ||
+            w.editions.find((e) => (e.passage_count || 0) > 0) ||
+            w.editions[0];
           return (
             <Link
               key={w.work_id}
@@ -70,12 +74,12 @@ function Collection({ title, works, accent }: { title: string; works: Work[]; ac
               <div className="font-arabic font-bold text-islamic-dark">{w.title_ar}</div>
               {w.author_ar && <div className="text-sm text-gray-500 mt-1">{w.author_ar}</div>}
               <div className="flex gap-2 mt-2 flex-wrap">
-                {w.editions.map((e) => (
+                {w.editions.filter((e) => (e.passage_count || 0) > 0).map((e) => (
                   <span
                     key={e.edition_id}
-                    className="text-[11px] px-2 py-0.5 rounded-full bg-islamic-teal/10 text-islamic-teal"
+                    className="text-[11px] px-2 py-0.5 rounded-full bg-islamic-teal/10 text-islamic-teal font-arabic"
                   >
-                    {e.source} · {(e.passage_count || 0).toLocaleString("en")}
+                    {t(`source_${e.source}`)} · {(e.passage_count || 0).toLocaleString("en")}
                   </span>
                 ))}
               </div>

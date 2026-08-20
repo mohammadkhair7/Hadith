@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, isLoggedIn } from "../api";
+import DisplayToggles from "../components/DisplayToggles";
+import IsnadChain from "../components/IsnadChain";
+import { displayText, matnStart, stripTashkeel, useDisplayPrefs } from "../text";
 
 export default function Passage() {
   const { t, i18n } = useTranslation();
@@ -11,6 +14,7 @@ export default function Passage() {
   const [others, setOthers] = useState<any[]>([]);
   const [isnad, setIsnad] = useState<any[]>([]);
   const [saved, setSaved] = useState(false);
+  const prefs = useDisplayPrefs();
 
   useEffect(() => {
     const lang = i18n.language !== "ar" ? `?lang=${i18n.language}` : "";
@@ -56,18 +60,20 @@ export default function Passage() {
               {t("part_page")}: {p.part}/{p.page}
             </span>
           )}
+          <DisplayToggles prefs={prefs} canMatn={matnStart(p.text_raw || "") > 0} />
           {isLoggedIn() && (
             <button onClick={favourite} disabled={saved}
-              className="ms-auto text-orange-accent hover:scale-110 transition-transform">
+              className="text-orange-accent hover:scale-110 transition-transform">
               {saved ? "★" : "☆"} {t("add_favourite")}
             </button>
           )}
         </div>
 
-        {p.html && p.source !== "shamela" ? (
-          <div className="arabic-text legacy-content" dangerouslySetInnerHTML={{ __html: p.html }} />
+        {p.html && p.source !== "shamela" && !prefs.matnOnly ? (
+          <div className="arabic-text legacy-content"
+            dangerouslySetInnerHTML={{ __html: prefs.tashkeel ? p.html : stripTashkeel(p.html) }} />
         ) : (
-          <div className="arabic-text whitespace-pre-wrap">{p.text_raw}</div>
+          <div className="arabic-text whitespace-pre-wrap">{displayText(p.text_raw || "", prefs)}</div>
         )}
 
         {p.translation && (
@@ -91,25 +97,7 @@ export default function Passage() {
         ) : <span />}
       </div>
 
-      {isnad.length > 0 && isnad[0].links?.length > 0 && (
-        <section className="mt-6 bg-deep-teal text-islamic-light rounded-xl p-4">
-          <h3 className="font-bold text-islamic-gold mb-3">{t("isnad_title")}</h3>
-          <div className="flex flex-wrap items-center gap-2 font-arabic text-sm">
-            {isnad[0].links.map((l: any, i: number) => (
-              <span key={i} className="flex items-center gap-2">
-                {i > 0 && <span className="text-orange-accent">←</span>}
-                <span className="bg-islamic-teal/40 rounded-full px-3 py-1">
-                  <span className="text-xs text-islamic-gold me-1">{l.verb}</span>
-                  {l.canonical_ar || l.mention_ar}
-                </span>
-              </span>
-            ))}
-          </div>
-          <div className="text-xs opacity-60 mt-2" dir="ltr">
-            confidence {isnad[0].confidence} · {isnad[0].extractor}
-          </div>
-        </section>
-      )}
+      {isnad.length > 0 && <IsnadChain chain={isnad[0]} />}
 
       {p.subjects?.length > 0 && (
         <section className="mt-6">

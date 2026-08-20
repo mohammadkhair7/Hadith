@@ -45,13 +45,13 @@ export default function Books() {
                 </td>
                 <td className="p-3">
                   <div className="flex gap-2 flex-wrap">
-                    {w.editions.map((e: any) => (
+                    {w.editions.filter((e: any) => (e.passage_count || 0) > 0).map((e: any) => (
                       <Link
                         key={e.edition_id}
                         to={`/read/${e.edition_id}`}
-                        className="px-2 py-1 rounded bg-islamic-teal/10 text-islamic-teal hover:bg-islamic-teal hover:text-white transition-colors text-xs"
+                        className="px-2 py-1 rounded bg-islamic-teal/10 text-islamic-teal hover:bg-islamic-teal hover:text-white transition-colors text-xs font-arabic"
                       >
-                        {e.source} ({(e.passage_count || 0).toLocaleString("en")})
+                        {t(`source_${e.source}`)} ({(e.passage_count || 0).toLocaleString("en")})
                       </Link>
                     ))}
                   </div>

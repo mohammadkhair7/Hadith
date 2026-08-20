@@ -1,27 +1,35 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 
 type GNode = {
   narrator_id: number; name: string; mentions: number;
+  generation?: string | null; death_year_h?: number | null;
   x?: number; y?: number; vx?: number; vy?: number;
 };
 type GEdge = { student: number; teacher: number; weight: number };
+type View = { x: number; y: number; w: number; h: number };
 
 const NEON = ["#10b981", "#3b82f6", "#facc15", "#22d3ee", "#ec4899", "#8b5cf6", "#f59e0b"];
 const W = 900, H = 620;
 
 export default function Narrators() {
   const { t } = useTranslation();
+  const [params] = useSearchParams();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([]);
   const [nodes, setNodes] = useState<Map<number, GNode>>(new Map());
   const [edges, setEdges] = useState<GEdge[]>([]);
   const [center, setCenter] = useState<number | null>(null);
-  const [hover, setHover] = useState<GNode | null>(null);
   const [selected, setSelected] = useState<any>(null);
+  const [view, setView] = useState<View>({ x: 0, y: 0, w: W, h: H });
+  const [tip, setTip] = useState<{ sx: number; sy: number; html: ReactNode } | null>(null);
   const simRef = useRef<number | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const panRef = useRef<{ px: number; py: number } | null>(null);
+  const viewRef = useRef(view);
+  viewRef.current = view;
   const [, forceRender] = useState(0);
 
   async function search() {
@@ -32,6 +40,7 @@ export default function Narrators() {
   async function loadGraph(id: number) {
     setResults([]);
     setCenter(id);
+    setView({ x: 0, y: 0, w: W, h: H });
     const g: any = await api(`/narrators/${id}/graph?depth=1&cap=60`);
     const m = new Map<number, GNode>();
     g.nodes.forEach((n: any, i: number) => {
@@ -48,6 +57,13 @@ export default function Narrators() {
     setSelected(await api(`/narrators/${id}`));
     startSim(m, g.edges);
   }
+
+  // deep link: /narrators?id=123 (e.g. from an isnad chain pill)
+  useEffect(() => {
+    const id = parseInt(params.get("id") || "", 10);
+    if (id) loadGraph(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]);
 
   async function expand(id: number) {
     const g: any = await api("/graph/expand", {
@@ -81,7 +97,6 @@ export default function Narrators() {
     let ticks = 0;
     const arr = [...m.values()];
     function tick() {
-      // repulsion
       for (const a of arr) {
         for (const b of arr) {
           if (a === b) continue;
@@ -92,7 +107,6 @@ export default function Narrators() {
           a.vy! += (dy / Math.sqrt(d2)) * f;
         }
       }
-      // springs
       for (const e of es) {
         const s = m.get(e.student), tt = m.get(e.teacher);
         if (!s || !tt) continue;
@@ -114,6 +128,82 @@ export default function Narrators() {
   }
 
   useEffect(() => () => { if (simRef.current) cancelAnimationFrame(simRef.current); }, []);
+
+  // wheel zoom (non-passive so we can preventDefault page scroll)
+  useEffect(() => {
+    const el = panelRef.current;
+    if (!el) return;
+    function onWheel(e: WheelEvent) {
+      e.preventDefault();
+      const rect = el!.getBoundingClientRect();
+      const mx = (e.clientX - rect.left) / rect.width;
+      const my = (e.clientY - rect.top) / rect.height;
+      setView((v) => {
+        const factor = e.deltaY > 0 ? 1.15 : 1 / 1.15;
+        const w = Math.max(W / 8, Math.min(W * 2.5, v.w * factor));
+        const h = w * (H / W);
+        return { x: v.x + (v.w - w) * mx, y: v.y + (v.h - h) * my, w, h };
+      });
+    }
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+
+  function zoomBy(factor: number) {
+    setView((v) => {
+      const w = Math.max(W / 8, Math.min(W * 2.5, v.w * factor));
+      const h = w * (H / W);
+      return { x: v.x + (v.w - w) / 2, y: v.y + (v.h - h) / 2, w, h };
+    });
+  }
+
+  function onPointerDown(e: React.PointerEvent) {
+    panRef.current = { px: e.clientX, py: e.clientY };
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+  }
+  function onPointerMove(e: React.PointerEvent) {
+    if (!panRef.current || !panelRef.current) return;
+    const rect = panelRef.current.getBoundingClientRect();
+    const v = viewRef.current;
+    const dx = ((e.clientX - panRef.current.px) / rect.width) * v.w;
+    const dy = ((e.clientY - panRef.current.py) / rect.height) * v.h;
+    panRef.current = { px: e.clientX, py: e.clientY };
+    setView({ ...v, x: v.x - dx, y: v.y - dy });
+  }
+  function onPointerUp() { panRef.current = null; }
+
+  function moveTip(e: React.MouseEvent, html: ReactNode) {
+    const rect = panelRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setTip({ sx: e.clientX - rect.left + 14, sy: e.clientY - rect.top + 10, html });
+  }
+
+  function nodeTip(n: GNode): ReactNode {
+    return (
+      <>
+        <div className="font-bold text-islamic-gold">{n.name}</div>
+        {n.generation && <div className="text-xs">{n.generation}</div>}
+        {n.death_year_h && <div className="text-xs">ت {n.death_year_h} هـ</div>}
+        <div className="text-xs opacity-80">{n.mentions} {t("narrators_mentions")}</div>
+        <div className="text-xs opacity-60 mt-1">{t("narrators_click_expand")}</div>
+      </>
+    );
+  }
+
+  function edgeTip(e: GEdge): ReactNode {
+    const s = nodes.get(e.student), tt = nodes.get(e.teacher);
+    if (!s || !tt) return null;
+    return (
+      <>
+        <div>
+          <span className="font-bold text-islamic-gold">{s.name}</span>
+          <span className="mx-1 text-xs">{t("narrated_from")}</span>
+          <span className="font-bold text-islamic-gold">{tt.name}</span>
+        </div>
+        <div className="text-xs opacity-80">{e.weight} {t("narration_times")}</div>
+      </>
+    );
+  }
 
   const nodeArr = [...nodes.values()];
 
@@ -142,42 +232,66 @@ export default function Narrators() {
       )}
 
       <div className="flex flex-col lg:flex-row gap-4">
-        <div className="flex-1 bg-[#0a0a0a] rounded-2xl shadow-lg overflow-hidden relative" dir="ltr">
+        <div ref={panelRef}
+          className="flex-1 bg-[#0a0a0a] rounded-2xl shadow-lg overflow-hidden relative select-none"
+          dir="ltr">
           {nodeArr.length === 0 ? (
             <div className="h-[620px] flex items-center justify-center text-gray-500 font-arabic">
               {t("narrators_hint")}
             </div>
           ) : (
-            <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
-              {edges.map((e, i) => {
-                const s = nodes.get(e.student), tt = nodes.get(e.teacher);
-                if (!s || !tt) return null;
-                return (
-                  <line key={i} x1={s.x} y1={s.y} x2={tt.x} y2={tt.y}
-                    stroke="#334155" strokeWidth={Math.min(1 + e.weight / 8, 4)}
-                    strokeOpacity={0.7} />
-                );
-              })}
-              {nodeArr.map((n, i) => (
-                <g key={n.narrator_id} transform={`translate(${n.x},${n.y})`}
-                  className="cursor-pointer"
-                  onMouseEnter={() => setHover(n)} onMouseLeave={() => setHover(null)}
-                  onClick={() => expand(n.narrator_id)}>
-                  <circle r={n.narrator_id === center ? 14 : Math.min(5 + Math.sqrt(n.mentions), 12)}
-                    fill={n.narrator_id === center ? "#D4AF37" : NEON[i % NEON.length]}
-                    stroke="#0a0a0a" strokeWidth={2} />
-                  <text y={-14} textAnchor="middle" fill="#e2e8f0" fontSize={11}
-                    className="font-arabic pointer-events-none">
-                    {n.name.length > 22 ? n.name.slice(0, 22) + "…" : n.name}
-                  </text>
-                </g>
-              ))}
-            </svg>
+            <>
+              <svg viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`} className="w-full touch-none"
+                style={{ cursor: panRef.current ? "grabbing" : "grab" }}
+                onPointerDown={onPointerDown} onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp} onPointerLeave={onPointerUp}>
+                {edges.map((e, i) => {
+                  const s = nodes.get(e.student), tt = nodes.get(e.teacher);
+                  if (!s || !tt) return null;
+                  return (
+                    <g key={i}>
+                      <line x1={s.x} y1={s.y} x2={tt.x} y2={tt.y}
+                        stroke="#334155" strokeWidth={Math.min(1 + e.weight / 8, 4)}
+                        strokeOpacity={0.7} />
+                      {/* invisible wide hit area for hover */}
+                      <line x1={s.x} y1={s.y} x2={tt.x} y2={tt.y}
+                        stroke="transparent" strokeWidth={10}
+                        onMouseMove={(ev) => moveTip(ev, edgeTip(e))}
+                        onMouseLeave={() => setTip(null)} />
+                    </g>
+                  );
+                })}
+                {nodeArr.map((n, i) => (
+                  <g key={n.narrator_id} transform={`translate(${n.x},${n.y})`}
+                    className="cursor-pointer"
+                    onPointerDown={(ev) => ev.stopPropagation()}
+                    onMouseMove={(ev) => moveTip(ev, nodeTip(n))}
+                    onMouseLeave={() => setTip(null)}
+                    onClick={() => expand(n.narrator_id)}>
+                    <circle r={n.narrator_id === center ? 14 : Math.min(5 + Math.sqrt(n.mentions), 12)}
+                      fill={n.narrator_id === center ? "#D4AF37" : NEON[i % NEON.length]}
+                      stroke="#0a0a0a" strokeWidth={2} />
+                    <text y={-14} textAnchor="middle" fill="#e2e8f0" fontSize={11}
+                      className="font-arabic pointer-events-none">
+                      {n.name.length > 22 ? n.name.slice(0, 22) + "…" : n.name}
+                    </text>
+                  </g>
+                ))}
+              </svg>
+              <div className="absolute bottom-3 right-3 flex flex-col gap-1">
+                <button onClick={() => zoomBy(1 / 1.3)} title="+"
+                  className="w-9 h-9 rounded-lg bg-deep-teal text-white text-lg hover:bg-islamic-teal">+</button>
+                <button onClick={() => zoomBy(1.3)} title="−"
+                  className="w-9 h-9 rounded-lg bg-deep-teal text-white text-lg hover:bg-islamic-teal">−</button>
+                <button onClick={() => setView({ x: 0, y: 0, w: W, h: H })} title={t("graph_reset")}
+                  className="w-9 h-9 rounded-lg bg-deep-teal text-white text-sm hover:bg-islamic-teal">⟳</button>
+              </div>
+            </>
           )}
-          {hover && (
-            <div className="absolute top-3 left-3 bg-deep-teal/95 text-white rounded-lg px-4 py-2 text-sm font-arabic" dir="rtl">
-              <div className="font-bold text-islamic-gold">{hover.name}</div>
-              <div className="text-xs opacity-80">{hover.mentions} {t("narrators_mentions")} — {t("narrators_click_expand")}</div>
+          {tip && (
+            <div className="absolute z-10 pointer-events-none bg-deep-teal/95 text-white rounded-lg px-3 py-2 text-sm font-arabic max-w-xs shadow-lg"
+              dir="rtl" style={{ left: tip.sx, top: tip.sy }}>
+              {tip.html}
             </div>
           )}
         </div>

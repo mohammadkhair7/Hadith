@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api";
+import DisplayToggles from "../components/DisplayToggles";
+import IsnadChain from "../components/IsnadChain";
+import { displayText, matnStart, stripTashkeel, useDisplayPrefs } from "../text";
 
 type TocNode = {
   toc_node_id: number;
@@ -21,6 +24,8 @@ export default function Reader() {
   const [roots, setRoots] = useState<TocNode[]>([]);
   const [passage, setPassage] = useState<any>(null);
   const [total, setTotal] = useState(0);
+  const [isnad, setIsnad] = useState<any[]>([]);
+  const prefs = useDisplayPrefs();
 
   useEffect(() => {
     api(`/editions/${editionId}/toc`).then((r: any) => {
@@ -31,8 +36,11 @@ export default function Reader() {
 
   useEffect(() => {
     api(`/editions/${editionId}/passages?seq=${seq}&limit=1`).then((r: any) => {
-      setPassage(r.items[0] || null);
+      const p = r.items[0] || null;
+      setPassage(p);
       setTotal(r.total);
+      setIsnad([]);
+      if (p) api(`/passages/${p.passage_id}/isnad`).then(setIsnad).catch(() => {});
     });
   }, [editionId, seq]);
 
@@ -63,30 +71,37 @@ export default function Reader() {
         )}
 
         {passage ? (
-          <article className="bg-white rounded-xl shadow p-6">
-            <div className="flex items-center gap-2 flex-wrap text-xs mb-4">
-              {passage.hadith_num && (
-                <span className="bg-islamic-gold text-deep-teal font-bold rounded-full px-3 py-1">
-                  {t("hadith_no")} {passage.hadith_num}
-                </span>
+          <>
+            <article className="bg-white rounded-xl shadow p-6">
+              <div className="flex items-center gap-2 flex-wrap text-xs mb-4">
+                {passage.hadith_num && (
+                  <span className="bg-islamic-gold text-deep-teal font-bold rounded-full px-3 py-1">
+                    {t("hadith_no")} {passage.hadith_num}
+                  </span>
+                )}
+                {passage.part && (
+                  <span className="bg-islamic-teal/10 text-islamic-teal rounded-full px-3 py-1">
+                    {t("part_page")}: {passage.part}/{passage.page}
+                  </span>
+                )}
+                <Link to={`/passage/${passage.passage_id}`}
+                  className="text-islamic-teal underline decoration-dotted">
+                  ↗
+                </Link>
+                <DisplayToggles prefs={prefs} canMatn={matnStart(passage.text_raw || "") > 0} />
+              </div>
+              {passage.html && passage.source !== "shamela" && !prefs.matnOnly ? (
+                <div className="arabic-text legacy-content"
+                  dangerouslySetInnerHTML={{
+                    __html: prefs.tashkeel ? passage.html : stripTashkeel(passage.html) }} />
+              ) : (
+                <div className="arabic-text whitespace-pre-wrap">
+                  {displayText(passage.text_raw || "", prefs)}
+                </div>
               )}
-              {passage.part && (
-                <span className="bg-islamic-teal/10 text-islamic-teal rounded-full px-3 py-1">
-                  {t("part_page")}: {passage.part}/{passage.page}
-                </span>
-              )}
-              <Link to={`/passage/${passage.passage_id}`}
-                className="text-islamic-teal underline decoration-dotted">
-                ↗
-              </Link>
-            </div>
-            {passage.html && passage.source !== "shamela" ? (
-              <div className="arabic-text legacy-content"
-                dangerouslySetInnerHTML={{ __html: passage.html }} />
-            ) : (
-              <div className="arabic-text whitespace-pre-wrap">{passage.text_raw}</div>
-            )}
-          </article>
+            </article>
+            {isnad.length > 0 && <IsnadChain chain={isnad[0]} />}
+          </>
         ) : (
           <div className="text-center py-16 text-gray-400">{t("loading")}</div>
         )}
