@@ -34,9 +34,11 @@ PDF) — into one unified **PostgreSQL** knowledge base with:
   **Redis** (HNSW vector index; replaces the MongoDB+FAISS pair used in Quran.chat),
   populated **incrementally and manually** through a Book Embedding Management screen
   with idempotent (skip-or-overwrite) re-embedding.
-- **NL2SQL + NL2CYPHER** — natural-language questions translated by `gemini-2.5-flash`
-  into read-only SQL (analytics over the unified schema) and openCypher (narrator
-  knowledge-graph queries), with an orchestrator that routes/combines all four engines.
+- **NL2SQL + NL2CYPHER** — natural-language questions translated by
+  `gemini-3-flash-preview` (`NL_QUERY_MODEL`, falls back to `gemini-2.5-flash` when
+  unavailable) into read-only SQL (analytics over the unified schema) and openCypher
+  (narrator knowledge-graph queries), with an orchestrator that routes/combines all
+  four engines.
 - **Narrator knowledge graph (رجال الحديث)** — a persistent, queryable graph (Postgres +
   **Apache AGE**, decision approved) of narrators, isnad chains, teacher/student links,
   and rijāl assessments, visualized as **query-scoped subgraphs with incremental
@@ -517,6 +519,10 @@ graph LR
 
 ### 8.2 NL2SQL (adopted from Quran.chat, retargeted)
 
+- Model: `gemini-3-flash-preview` (env `NL_QUERY_MODEL`; automatic per-call fallback
+  to `LLM_MODEL`/`gemini-2.5-flash` if the preview model becomes unavailable) —
+  switched 2026-08-20 for its stronger SQL/Cypher generation. Applies to §8.3 too;
+  the router and translation paths stay on `LLM_MODEL`.
 - Prompt = role + **schema summary** (generated from `information_schema`, cached) +
   **semantic view YAML** (`docs/semantic_view.yaml`, describing tables/joins/enums in
   Arabic+English) + few-shot examples + question. Output JSON `{enhanced, sql}`.
@@ -1290,6 +1296,7 @@ REDIS_PUBLIC_URL=...
 CORS_ORIGINS=...
 VITE_API_URL=...                                  # frontend build-time
 NL2SQL_ROLE_URL=...                               # read-only Postgres role for agents
+NL_QUERY_MODEL=gemini-3-flash-preview             # NL2SQL/NL2CYPHER model (falls back to LLM_MODEL)
 DEFAULT_LANGUAGE=ar
 SUPPORTED_LANGUAGES=ar,en                         # approved scope for now; ~64 more later
 KALIMAT_API_KEY=...                               # already in .env — hadith EN lookups (§11.6)

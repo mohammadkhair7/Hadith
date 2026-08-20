@@ -6,7 +6,7 @@ Unified Hadith knowledge platform merging three corpora — **hadith.db**
 
 - Tashkeel-insensitive keyword search (Postgres FTS + pg_trgm)
 - Semantic search (`gemini-embedding-001` vectors in Redis 8, HNSW)
-- NL2SQL + NL2CYPHER natural-language question answering (`gemini-2.5-flash`)
+- NL2SQL + NL2CYPHER natural-language question answering (`gemini-3-flash-preview`, auto-fallback to `gemini-2.5-flash`)
 - Narrator knowledge graph (رجال الحديث) on Apache AGE with a bounded-subgraph explorer
 - Manual, incremental, idempotent pipelines for embeddings, translations and indexing
 - Kalimat.dev-first hadith English translations with Gemini fallback

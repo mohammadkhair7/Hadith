@@ -7,6 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from ..config import settings
 from .llm import generate_json
 from .normalize import normalize_arabic
 
@@ -236,14 +237,15 @@ def _looks_wrong(rows: list) -> str | None:
 
 def run_nl2sql(conn, question: str) -> dict[str, Any]:
     arabic = _arabic_form(question)
-    out = generate_json(_prompt(conn, question, arabic=arabic))
+    model = settings.nl_query_model
+    out = generate_json(_prompt(conn, question, arabic=arabic), model=model)
     sql = validate_sql(out.get("sql", ""))
     try:
         rows = _execute_readonly(conn, sql)
     except Exception as e:
         conn.rollback()
         out = generate_json(_prompt(conn, question, error=str(e), prev_sql=sql,
-                                    arabic=arabic))
+                                    arabic=arabic), model=model)
         sql = validate_sql(out.get("sql", ""))
         rows = _execute_readonly(conn, sql)
     suspicion = _looks_wrong(rows)
@@ -256,7 +258,8 @@ def run_nl2sql(conn, question: str) -> dict[str, Any]:
                 "needs kind='unit' and an edition that actually has units; shamela "
                 "editions of matn books contain pages, not units; Arabic-content "
                 "literals must be normalized ARABIC script never Latin transliteration; "
-                "prefer grounded narrator_id / work_id filters over name strings."))
+                "prefer grounded narrator_id / work_id filters over name strings."),
+                model=model)
             sql2 = validate_sql(out2.get("sql", ""))
             rows2 = _execute_readonly(conn, sql2)
             if not _looks_wrong(rows2):

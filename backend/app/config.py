@@ -23,6 +23,8 @@ class Settings(BaseSettings):
 
     gemini_api_key: str = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or ""
     llm_model: str = os.getenv("LLM_MODEL", "gemini-2.5-flash")
+    # NL2SQL / NL2CYPHER generation; falls back to llm_model when unavailable
+    nl_query_model: str = os.getenv("NL_QUERY_MODEL", "gemini-3-flash-preview")
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "gemini-embedding-001")
     embedding_dimensions: int = int(os.getenv("EMBEDDING_DIMENSIONS", "768"))
 

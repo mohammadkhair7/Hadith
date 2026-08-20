@@ -5,6 +5,7 @@ import json
 import re
 from typing import Any
 
+from ..config import settings
 from .llm import generate_json
 
 GRAPH_NAME = "hadith_graph"
@@ -124,13 +125,15 @@ def run_nl2cypher(conn, question: str) -> dict[str, Any]:
     except Exception:
         conn.rollback()
         frame = None                       # frame is additive, never a gate (§12.3)
-    out = generate_json(_prompt(question, frame=frame))
+    model = settings.nl_query_model
+    out = generate_json(_prompt(question, frame=frame), model=model)
     cy = validate_cypher(out.get("cypher", ""))
     try:
         rows = _execute_cypher(conn, cy)
     except Exception as e:
         conn.rollback()
-        out = generate_json(_prompt(question, error=str(e), prev=cy, frame=frame))
+        out = generate_json(_prompt(question, error=str(e), prev=cy, frame=frame),
+                            model=model)
         cy = validate_cypher(out.get("cypher", ""))
         rows = _execute_cypher(conn, cy)
     if not rows:
@@ -140,7 +143,7 @@ def run_nl2cypher(conn, question: str) -> dict[str, Any]:
                 question, prev=cy, frame=frame,
                 error="the query executed but matched nothing — use CONTAINS with a "
                 "shorter normalized name fragment (no tashkeel, ابو not أبو, بن not ابن), "
-                "or match by narrator_id from the frame"))
+                "or match by narrator_id from the frame"), model=model)
             cy2 = validate_cypher(out2.get("cypher", ""))
             rows2 = _execute_cypher(conn, cy2)
             if rows2:
