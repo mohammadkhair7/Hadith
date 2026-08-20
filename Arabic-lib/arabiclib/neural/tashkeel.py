@@ -429,6 +429,56 @@ def _db_url() -> str:
     raise SystemExit("no DATABASE_URL / LOCAL_PG_URL found")
 
 
+def _annotate_edition(conn, edition_id: int, model, vocab, dev, tvocab, tagger,
+                      version: str, limit: int | None, resume: bool) -> tuple[int, int]:
+    """Annotate one edition; returns (written, skipped). With resume=True,
+    passages that already carry the current-version row are not re-run."""
+    sql = "SELECT p.passage_id, p.text_raw FROM passages p WHERE p.edition_id=%s"
+    params: list = [edition_id]
+    if resume:
+        sql += """ AND NOT EXISTS (
+            SELECT 1 FROM passage_annotations a
+            WHERE a.passage_id=p.passage_id AND a.layer='diacritized'
+              AND a.engine='neural-tashkeel' AND a.version=%s)"""
+        params.append(version)
+    sql += " ORDER BY p.seq"
+    if limit:
+        sql += " LIMIT %s"
+        params.append(limit)
+    rows = conn.execute(sql, params).fetchall()
+    t0 = time.time()
+    written = skipped = 0
+    print(f"edition {edition_id}: {len(rows)} passages to process, "
+          f"model=v{version}", flush=True)
+    for n, (pid, raw) in enumerate(rows, 1):
+        merged = annotate_text(model, vocab, dev, raw or "",
+                               tvocab=tvocab, tagger=tagger)
+        if merged != (raw or ""):
+            # serving joins on (layer, engine) only: keep exactly one version
+            conn.execute("""
+                DELETE FROM passage_annotations
+                WHERE passage_id=%s AND layer='diacritized'
+                  AND engine='neural-tashkeel' AND version <> %s
+            """, (pid, version))
+            conn.execute("""
+                INSERT INTO passage_annotations (passage_id, layer, engine, version, payload)
+                VALUES (%s, 'diacritized', 'neural-tashkeel', %s, %s)
+                ON CONFLICT (passage_id, layer, engine, version)
+                DO UPDATE SET payload = EXCLUDED.payload, created_at = now()
+            """, (pid, version, json.dumps({"text": merged}, ensure_ascii=False)))
+            written += 1
+        else:
+            skipped += 1
+        if n % 200 == 0:
+            conn.commit()
+            print(f"  {n}/{len(rows)} written={written} skipped={skipped} "
+                  f"({time.time()-t0:.0f}s)", flush=True)
+    conn.commit()
+    print(f"edition {edition_id} done: written={written} "
+          f"skipped(no change)={skipped} in {time.time()-t0:.0f}s", flush=True)
+    return written, skipped
+
+
 def annotate(args) -> None:
     import psycopg
     pos = getattr(args, "pos", False)
@@ -437,42 +487,44 @@ def annotate(args) -> None:
     model.to(dev)
     tagger = _PosTagger(dev) if pos else None
     version = "0.2" if pos else "0.1"
-    t0 = time.time()
-    written = skipped = 0
     with psycopg.connect(_db_url()) as conn:
-        sql = "SELECT passage_id, text_raw FROM passages WHERE edition_id=%s ORDER BY seq"
-        params: tuple = (args.edition,)
-        if args.limit:
-            sql += " LIMIT %s"
-            params = (args.edition, args.limit)
-        rows = conn.execute(sql, params).fetchall()
-        print(f"edition {args.edition}: {len(rows)} passages, device={dev}, "
-              f"model=v{version}", flush=True)
-        for n, (pid, raw) in enumerate(rows, 1):
-            merged = annotate_text(model, vocab, dev, raw or "",
-                                   tvocab=tvocab, tagger=tagger)
-            if merged != (raw or ""):
-                # serving joins on (layer, engine) only: keep exactly one version
-                conn.execute("""
-                    DELETE FROM passage_annotations
-                    WHERE passage_id=%s AND layer='diacritized'
-                      AND engine='neural-tashkeel' AND version <> %s
-                """, (pid, version))
-                conn.execute("""
-                    INSERT INTO passage_annotations (passage_id, layer, engine, version, payload)
-                    VALUES (%s, 'diacritized', 'neural-tashkeel', %s, %s)
-                    ON CONFLICT (passage_id, layer, engine, version)
-                    DO UPDATE SET payload = EXCLUDED.payload, created_at = now()
-                """, (pid, version, json.dumps({"text": merged}, ensure_ascii=False)))
-                written += 1
-            else:
-                skipped += 1
-            if n % 200 == 0:
-                conn.commit()
-                print(f"  {n}/{len(rows)} written={written} skipped={skipped} "
-                      f"({time.time()-t0:.0f}s)", flush=True)
-        conn.commit()
-    print(f"done: written={written} skipped(no change)={skipped} in {time.time()-t0:.0f}s")
+        if not getattr(args, "all_shamela", False):
+            if not args.edition:
+                sys.exit("need --edition N or --all-shamela")
+            _annotate_edition(conn, args.edition, model, vocab, dev, tvocab,
+                              tagger, version, args.limit, resume=False)
+            return
+        # bulk mode: every shamela edition, smallest first, resumable via the
+        # etl_state ledger + per-passage NOT EXISTS for the interrupted one
+        eds = conn.execute("""
+            SELECT edition_id, passage_count FROM editions
+            WHERE source='shamela' ORDER BY passage_count, edition_id
+        """).fetchall()
+        print(f"bulk: {len(eds)} shamela editions, device={dev}, model=v{version}",
+              flush=True)
+        tot_w = tot_s = 0
+        for i, (eid, count) in enumerate(eds, 1):
+            step = f"tashkeel{version}_edition_{eid}"
+            done = conn.execute(
+                "SELECT 1 FROM etl_state WHERE step=%s AND status='done'", (step,)
+            ).fetchone()
+            if done:
+                print(f"[{i}/{len(eds)}] edition {eid} ({count} pages): ledger done, skip",
+                      flush=True)
+                continue
+            print(f"[{i}/{len(eds)}] edition {eid} ({count} pages)", flush=True)
+            w, s = _annotate_edition(conn, eid, model, vocab, dev, tvocab,
+                                     tagger, version, None, resume=True)
+            tot_w += w
+            tot_s += s
+            conn.execute("""
+                INSERT INTO etl_state (step, status, detail)
+                VALUES (%s, 'done', %s)
+                ON CONFLICT (step) DO UPDATE SET status='done', detail=EXCLUDED.detail,
+                    updated_at=now()
+            """, (step, json.dumps({"written": w, "skipped": s})))
+            conn.commit()
+        print(f"bulk done: written={tot_w} skipped={tot_s}", flush=True)
 
 
 def main() -> None:
@@ -495,7 +547,9 @@ def main() -> None:
     td = sub.add_parser("tag-data", help="POS-tag tashkeel.jsonl -> tashkeel_pos.jsonl")
     td.add_argument("--limit", type=int, default=None)
     an = sub.add_parser("annotate", help="precompute diacritized layer for an edition")
-    an.add_argument("--edition", type=int, required=True)
+    an.add_argument("--edition", type=int)
+    an.add_argument("--all-shamela", action="store_true", dest="all_shamela",
+                    help="every shamela edition, smallest first, resumable")
     an.add_argument("--limit", type=int, default=None)
     an.add_argument("--pos", action="store_true")
     args = ap.parse_args()
