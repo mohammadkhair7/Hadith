@@ -1,54 +1,116 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { cleanText, matnStart, stripTashkeel } from "../text";
+import { cleanText, mapRawOffset, matnStart, segmentHadiths, stripTashkeel } from "../text";
+
+type Prefs = { tashkeel: boolean; matnOnly: boolean };
 
 /** Hadith body with the sanad visually distinguished from the matn.
- *  Uses the extractor's stored raw offset when available, otherwise the
- *  client-side marker heuristic. Honors tashkeel / matn-only preferences.
- *  Clicking the sanad or the matn toggles a strong highlight on that part. */
-export default function HadithText({ raw, sanadEndRaw, prefs }: {
+ *
+ *  - Single hadith: uses the extractor's stored raw offset when available,
+ *    otherwise the client-side marker heuristic.
+ *  - Pages with SEVERAL hadiths: each transmission chain becomes its own
+ *    section with its own sanad/matn split (never one giant sanad).
+ *  - When a diacritized rendering is available and tashkeel is on, it is
+ *    displayed instead of the bare text (offsets are remapped).
+ *  - Clicking a sanad or a matn toggles a strong highlight on that part;
+ *    "matn only" lists every matn in its own section. */
+export default function HadithText({ raw, diac, sanadEndRaw, prefs }: {
   raw: string;
+  diac?: string | null;
   sanadEndRaw?: number | null;
-  prefs: { tashkeel: boolean; matnOnly: boolean };
+  prefs: Prefs;
+}) {
+  const [focus, setFocus] = useState("");
+  const text = prefs.tashkeel && diac ? diac : raw;
+  const usingDiac = text !== raw;
+  const fmt = (s: string) => cleanText(prefs.tashkeel ? s : stripTashkeel(s));
+  const toggle = (key: string) => setFocus(focus === key ? "" : key);
+
+  // trust the extractor's stored boundary (single hadith unit) when present
+  if (sanadEndRaw && sanadEndRaw > 0) {
+    const b = usingDiac ? mapRawOffset(text, sanadEndRaw) : sanadEndRaw;
+    return (
+      <div className="arabic-text whitespace-pre-wrap">
+        <HadithBlock text={text} boundary={b} fmt={fmt}
+          focusKey="0" focus={focus} toggle={toggle} matnOnly={prefs.matnOnly} />
+      </div>
+    );
+  }
+
+  const starts = segmentHadiths(text);
+  if (starts.length === 0) {
+    const b = matnStart(text);
+    return (
+      <div className="arabic-text whitespace-pre-wrap">
+        <HadithBlock text={text} boundary={b} fmt={fmt}
+          focusKey="0" focus={focus} toggle={toggle} matnOnly={prefs.matnOnly} />
+      </div>
+    );
+  }
+
+  // several hadiths on one page: one section per chain
+  const intro = text.slice(0, starts[0]);
+  const segs = starts.map((s, i) => text.slice(s, starts[i + 1] ?? text.length));
+  return (
+    <div className="arabic-text whitespace-pre-wrap space-y-3">
+      {!prefs.matnOnly && intro.trim() && <div>{fmt(intro)}</div>}
+      {segs.map((seg, i) => {
+        const b = matnStart(seg);
+        if (prefs.matnOnly && b <= 0) return null;
+        return (
+          <div key={i}
+            className="border-s-2 border-islamic-gold/50 ps-3 rounded-sm">
+            <HadithBlock text={seg} boundary={b} fmt={fmt}
+              focusKey={String(i)} focus={focus} toggle={toggle}
+              matnOnly={prefs.matnOnly} />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function HadithBlock({ text, boundary, fmt, focusKey, focus, toggle, matnOnly }: {
+  text: string;
+  boundary: number;
+  fmt: (s: string) => string;
+  focusKey: string;
+  focus: string;
+  toggle: (key: string) => void;
+  matnOnly: boolean;
 }) {
   const { t } = useTranslation();
-  const [focus, setFocus] = useState<"" | "sanad" | "matn">("");
-  const boundary = sanadEndRaw && sanadEndRaw > 0 ? sanadEndRaw : matnStart(raw);
-  // clean AFTER slicing so the sanad/matn boundary offsets stay valid
-  const fmt = (s: string) => cleanText(prefs.tashkeel ? s : stripTashkeel(s));
+  if (boundary <= 0) return <span>{fmt(text)}</span>;
+  if (matnOnly) return <span>{fmt(text.slice(boundary))}</span>;
 
-  if (boundary <= 0) {
-    return <div className="arabic-text whitespace-pre-wrap">{fmt(raw)}</div>;
-  }
-  if (prefs.matnOnly) {
-    return <div className="arabic-text whitespace-pre-wrap">{fmt(raw.slice(boundary))}</div>;
-  }
-  const toggle = (part: "sanad" | "matn") => setFocus(focus === part ? "" : part);
+  const sKey = `${focusKey}:sanad`;
+  const mKey = `${focusKey}:matn`;
+  const other = focus && focus.startsWith(`${focusKey}:`);
   const sanadCls =
-    focus === "sanad"
+    focus === sKey
       ? "bg-islamic-teal/20 text-deep-teal ring-2 ring-islamic-teal rounded px-0.5 box-decoration-clone"
-      : focus === "matn"
+      : other
         ? "text-gray-400"
         : "text-gray-500";
   const matnCls =
-    focus === "matn"
+    focus === mKey
       ? "bg-islamic-gold/40 ring-2 ring-islamic-gold rounded px-0.5 box-decoration-clone"
-      : focus === "sanad"
+      : other
         ? "text-gray-400"
         : "bg-islamic-gold/15 rounded px-0.5 box-decoration-clone";
   return (
-    <div className="arabic-text whitespace-pre-wrap">
+    <>
       <span className={`cursor-pointer transition-colors ${sanadCls}`}
         title={t("click_highlight_sanad")}
-        onClick={() => toggle("sanad")}>
-        {fmt(raw.slice(0, boundary))}
+        onClick={() => toggle(sKey)}>
+        {fmt(text.slice(0, boundary))}
       </span>
       <span className={`cursor-pointer transition-colors ${matnCls}`}
         title={t("click_highlight_matn")}
-        onClick={() => toggle("matn")}>
-        {fmt(raw.slice(boundary))}
+        onClick={() => toggle(mKey)}>
+        {fmt(text.slice(boundary))}
       </span>
-    </div>
+    </>
   );
 }
 

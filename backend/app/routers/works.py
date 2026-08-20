@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
 from ..db import db, q, q1
+from ..services.diacritics import from_html
 
 router = APIRouter(tags=["works"])
 
@@ -116,5 +117,12 @@ def edition_passages(edition_id: int, seq: int = 0, limit: int = 1):
             WHERE p.edition_id=%s AND p.seq >= %s
             ORDER BY p.seq LIMIT %s
         """, (edition_id, seq, limit))
+        if limit <= 10:
+            # authentic source tashkeel beats the neural layer when available
+            for r in rows:
+                if r["source"] == "sunna" and r["html"]:
+                    d = from_html(r["text_raw"], r["html"])
+                    if d:
+                        r["text_diac"] = d
         total = q1(conn, "SELECT passage_count AS n FROM editions WHERE edition_id=%s", (edition_id,))
     return {"total": total["n"] if total else 0, "items": rows}

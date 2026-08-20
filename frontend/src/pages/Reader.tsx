@@ -5,7 +5,7 @@ import { api } from "../api";
 import DisplayToggles from "../components/DisplayToggles";
 import HadithText, { GradeBadge } from "../components/HadithText";
 import IsnadChain from "../components/IsnadChain";
-import { cleanText, matnStart, stripTashkeel, useDisplayPrefs } from "../text";
+import { cleanText, matnStart, segmentHadiths, stripTashkeel, useDisplayPrefs } from "../text";
 
 type TocNode = {
   toc_node_id: number;
@@ -50,9 +50,15 @@ export default function Reader() {
     window.scrollTo({ top: 0 });
   }
 
-  const boundary = passage
-    ? (isnad[0]?.sanad_end_raw > 0 ? isnad[0].sanad_end_raw : matnStart(passage.text_raw || ""))
-    : -1;
+  const raw = passage?.text_raw || "";
+  const dbBoundary = isnad[0]?.sanad_end_raw > 0 ? isnad[0].sanad_end_raw : 0;
+  const hasChains = passage
+    ? dbBoundary > 0 || matnStart(raw) > 0 || segmentHadiths(raw).length > 0
+    : false;
+  // legacy HTML rendering only for pages without hadith chains (tables etc.)
+  const useHadithText = passage
+    ? passage.kind === "unit" || passage.source === "shamela" || !passage.html || hasChains
+    : false;
 
   return (
     <div className="flex gap-6">
@@ -95,22 +101,16 @@ export default function Reader() {
                   ↗
                 </Link>
                 <DisplayToggles prefs={prefs}
-                  canMatn={boundary > 0} />
+                  canMatn={hasChains} />
               </div>
               <div className="max-h-[68vh] overflow-y-auto toc-scroll pe-2 break-words">
-                {prefs.tashkeel && passage.text_diac
-                 && !(boundary > 0 || passage.kind === "unit") ? (
-                  <div className="arabic-text whitespace-pre-wrap">
-                    {cleanText(passage.text_diac)}
-                  </div>
-                ) : boundary > 0 || passage.kind === "unit" ? (
-                  <HadithText raw={passage.text_raw || ""} sanadEndRaw={boundary} prefs={prefs} />
-                ) : passage.html && passage.source !== "shamela" ? (
+                {useHadithText ? (
+                  <HadithText raw={raw} diac={passage.text_diac}
+                    sanadEndRaw={dbBoundary} prefs={prefs} />
+                ) : (
                   <div className="arabic-text legacy-content"
                     dangerouslySetInnerHTML={{
-                      __html: prefs.tashkeel ? passage.html : stripTashkeel(passage.html) }} />
-                ) : (
-                  <HadithText raw={passage.text_raw || ""} prefs={prefs} />
+                      __html: cleanText(prefs.tashkeel ? passage.html : stripTashkeel(passage.html)) }} />
                 )}
               </div>
             </article>

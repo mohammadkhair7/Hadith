@@ -4,12 +4,16 @@ Creates: works + editions (one per book), toc_nodes, passages, subjects,
 subject_links. Resumable at book granularity via etl_state.
 """
 import json
+import re
 import sqlite3
 
 from db import SOURCES, connect
 from normalize import normalize_arabic
 
 BATCH = 2000
+
+# crawler JavaScript that leaked into text_plain of service pages
+_JUNK = re.compile(r"AddHistory\s*\([^)]*\)\s*;?")
 
 
 def state_done(pg, step: str) -> bool:
@@ -139,7 +143,7 @@ def load_passages(sq, pg, editions: dict[int, int]) -> None:
                 "part, page, text_raw, text_norm, html, meta) FROM STDIN"
             ) as cp:
                 for seq, (main_id, html, text_plain, hadith_num, part_page, prev_id, next_id) in enumerate(rows):
-                    text_raw = text_plain or ""
+                    text_raw = _JUNK.sub(" ", text_plain or "").strip()
                     part, page = None, None
                     if part_page and "/" in str(part_page):
                         part, page = str(part_page).split("/", 1)

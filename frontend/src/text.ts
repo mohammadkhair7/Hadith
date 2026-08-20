@@ -31,12 +31,9 @@ function normChar(c: string): string {
 const MATN_MARKERS =
   /(قال|يقول|سمعت)\s+(رسول\s+الله|النبي)|ان\s+(رسول\s+الله|النبي)\s|عن\s+النبي\s/g;
 
-/**
- * Heuristic matn boundary: index in the RAW string where the matn begins
- * (the last Prophet-speech marker). Returns -1 when not found or when the
- * remainder would be too short to be a matn.
- */
-export function matnStart(raw: string): number {
+/** Diacritics-insensitive normalized view of a string plus an index map
+ *  back to the original offsets. */
+function normWithMap(raw: string): { norm: string; map: number[] } {
   let norm = "";
   const map: number[] = [];
   for (let i = 0; i < raw.length; i++) {
@@ -45,12 +42,61 @@ export function matnStart(raw: string): number {
     norm += normChar(c);
     map.push(i);
   }
+  return { norm, map };
+}
+
+/**
+ * Heuristic matn boundary: index in the RAW string where the matn begins
+ * (the last Prophet-speech marker). Returns -1 when not found or when the
+ * remainder would be too short to be a matn.
+ */
+export function matnStart(raw: string): number {
+  const { norm, map } = normWithMap(raw);
   let last = -1;
   let m: RegExpExecArray | null;
   MATN_MARKERS.lastIndex = 0;
   while ((m = MATN_MARKERS.exec(norm)) !== null) last = m.index;
   if (last < 0 || norm.length - last < 25 || last === 0) return -1;
   return map[last];
+}
+
+// A hadith chain start: a transmission verb at a sentence boundary
+// (text start, after punctuation, or after a hadith number like "19 -").
+const CHAIN_VERB = "و?(?:حدثنا|حدثني|اخبرنا|اخبرني|انبانا|انباني)";
+const CHAIN_START = new RegExp(
+  `(?:^|[.:؟!؛»\\)\\]\\n]\\s*|\\d\\s*[-–—]\\s*)(${CHAIN_VERB})\\s`, "g");
+
+/**
+ * Start offsets (in the ORIGINAL string) of each hadith transmission chain.
+ * Returns [] when fewer than two chains are found (single-hadith text).
+ */
+export function segmentHadiths(raw: string): number[] {
+  const { norm, map } = normWithMap(raw);
+  const starts: number[] = [];
+  let m: RegExpExecArray | null;
+  CHAIN_START.lastIndex = 0;
+  while ((m = CHAIN_START.exec(norm)) !== null) {
+    const pos = m.index + m[0].indexOf(m[1]);
+    starts.push(map[pos]);
+    // allow overlapping sentence-boundary lookarounds
+    CHAIN_START.lastIndex = m.index + m[0].length - 1;
+  }
+  return starts.length >= 2 ? starts : [];
+}
+
+// only the marks that diacritization inserts (NOT tatweel, which is base text)
+const MARK_ONE = /[\u064B-\u0652\u0670]/;
+
+/** Map a character offset in the bare text to the same logical position in
+ *  the diacritized text (identical base chars, marks inserted). */
+export function mapRawOffset(diac: string, rawOffset: number): number {
+  let count = 0;
+  for (let i = 0; i < diac.length; i++) {
+    if (MARK_ONE.test(diac[i])) continue;
+    if (count === rawOffset) return i;
+    count++;
+  }
+  return diac.length;
 }
 
 export type DisplayPrefs = {

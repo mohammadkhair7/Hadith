@@ -6,7 +6,7 @@ import DisplayToggles from "../components/DisplayToggles";
 import ExportBar from "../components/ExportBar";
 import HadithText, { GradeBadge } from "../components/HadithText";
 import IsnadChain from "../components/IsnadChain";
-import { matnStart, stripTashkeel, useDisplayPrefs } from "../text";
+import { cleanText, matnStart, segmentHadiths, stripTashkeel, useDisplayPrefs } from "../text";
 
 export default function Passage() {
   const { t, i18n } = useTranslation();
@@ -36,7 +36,10 @@ export default function Passage() {
 
   if (!p) return <div className="text-center py-16 text-gray-400">{t("loading")}</div>;
 
-  const boundary = p.sanad_end_raw > 0 ? p.sanad_end_raw : matnStart(p.text_raw || "");
+  const raw = p.text_raw || "";
+  const dbBoundary = p.sanad_end_raw > 0 ? p.sanad_end_raw : 0;
+  const hasChains = dbBoundary > 0 || matnStart(raw) > 0 || segmentHadiths(raw).length > 0;
+  const useHadithText = p.kind === "unit" || p.source === "shamela" || !p.html || hasChains;
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -65,7 +68,7 @@ export default function Passage() {
             </span>
           )}
           <GradeBadge grade={p.grade} />
-          <DisplayToggles prefs={prefs} canMatn={boundary > 0} />
+          <DisplayToggles prefs={prefs} canMatn={hasChains} />
           <ExportBar title={`${p.work_title || ""} ${p.hadith_num ? "حديث " + p.hadith_num : ""}`}
             text={() => p.text_raw || ""}
             html={() => `<div style="white-space:pre-wrap">${(p.text_raw || "").replace(/</g, "&lt;")}</div>`} />
@@ -77,13 +80,12 @@ export default function Passage() {
           )}
         </div>
 
-        {boundary > 0 || p.kind === "unit" ? (
-          <HadithText raw={p.text_raw || ""} sanadEndRaw={boundary} prefs={prefs} />
-        ) : p.html && p.source !== "shamela" ? (
-          <div className="arabic-text legacy-content"
-            dangerouslySetInnerHTML={{ __html: prefs.tashkeel ? p.html : stripTashkeel(p.html) }} />
+        {useHadithText ? (
+          <HadithText raw={raw} diac={p.text_diac} sanadEndRaw={dbBoundary} prefs={prefs} />
         ) : (
-          <HadithText raw={p.text_raw || ""} prefs={prefs} />
+          <div className="arabic-text legacy-content"
+            dangerouslySetInnerHTML={{
+              __html: cleanText(prefs.tashkeel ? p.html : stripTashkeel(p.html)) }} />
         )}
 
         {p.translation && (
