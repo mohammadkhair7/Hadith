@@ -1,15 +1,49 @@
 """Hadith analysis endpoints: corpus overview, isnad coverage, grade
 distribution, top narrators / transmission pairs, chain-length and
-transmission-verb statistics, and per-passage corroborations (متابعات)."""
+transmission-verb statistics, and per-passage corroborations (متابعات).
+
+The corpus-wide aggregations scan ~1M isnad rows, so results are cached
+in-process (the data only changes on ETL runs) and warmed at startup."""
+import time
+from typing import Any, Callable
+
 from fastapi import APIRouter, HTTPException
 
 from ..db import db, q, q1
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
+_CACHE: dict[str, tuple[float, Any]] = {}
+_TTL = 12 * 3600
+
+
+def _cached(key: str, build: Callable[[], Any]) -> Any:
+    hit = _CACHE.get(key)
+    if hit and time.time() - hit[0] < _TTL:
+        return hit[1]
+    val = build()
+    _CACHE[key] = (time.time(), val)
+    return val
+
+
+def warm_cache() -> None:
+    """Prime the heavy corpus-wide aggregations (called from startup)."""
+    overview()
+    grades(None)
+    top_narrators(25)
+    top_narrators(20)
+    top_pairs(25)
+    top_pairs(20)
+    chain_lengths()
+    transmission_verbs(None)
+
 
 @router.get("/overview")
 def overview():
+    return _cached("overview", _overview)
+
+
+def _overview():
     with db() as conn:
         totals = q1(conn, """
             SELECT
@@ -42,6 +76,10 @@ def overview():
 
 @router.get("/grades")
 def grades(edition_id: int | None = None):
+    return _cached(f"grades:{edition_id}", lambda: _grades(edition_id))
+
+
+def _grades(edition_id: int | None):
     with db() as conn:
         args: tuple = ()
         where = ""
@@ -61,6 +99,10 @@ def grades(edition_id: int | None = None):
 
 @router.get("/top-narrators")
 def top_narrators(limit: int = 25):
+    return _cached(f"top-narrators:{limit}", lambda: _top_narrators(limit))
+
+
+def _top_narrators(limit: int):
     with db() as conn:
         rows = q(conn, """
             SELECT n.narrator_id, n.canonical_ar, n.generation, n.death_year_h,
@@ -79,6 +121,10 @@ def top_narrators(limit: int = 25):
 
 @router.get("/top-pairs")
 def top_pairs(limit: int = 25):
+    return _cached(f"top-pairs:{limit}", lambda: _top_pairs(limit))
+
+
+def _top_pairs(limit: int):
     with db() as conn:
         rows = q(conn, """
             SELECT sn.narrator_id AS student_id, sn.canonical_ar AS student,
@@ -97,6 +143,10 @@ def top_pairs(limit: int = 25):
 
 @router.get("/chain-lengths")
 def chain_lengths():
+    return _cached("chain-lengths", _chain_lengths)
+
+
+def _chain_lengths():
     with db() as conn:
         rows = q(conn, """
             SELECT hops, count(*) AS n FROM (
@@ -109,6 +159,10 @@ def chain_lengths():
 @router.get("/verbs")
 def transmission_verbs(edition_id: int | None = None):
     """حدثنا vs عن ... — the معنعن ratio is a classic isnad-criticism signal."""
+    return _cached(f"verbs:{edition_id}", lambda: _verbs(edition_id))
+
+
+def _verbs(edition_id: int | None):
     with db() as conn:
         if edition_id:
             rows = q(conn, """

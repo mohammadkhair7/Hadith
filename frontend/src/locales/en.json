@@ -97,6 +97,8 @@
   "editions": "Editions / Sources",
   "open_book": "Open book",
   "loading": "Loading…",
+  "retry": "Retry",
+  "analytics_error": "Could not load the analytics — the server may be starting up.",
   "admin_status": "System status",
   "compare_editions": "Compare editions",
   "show_original": "Original text"

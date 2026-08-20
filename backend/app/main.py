@@ -1,3 +1,5 @@
+import logging
+import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -9,9 +11,17 @@ from .routers import (admin, analytics, ask, auth, narrators, passages, search,
                       subjects, user_items, works)
 
 
+def _warm_analytics() -> None:
+    try:
+        analytics.warm_cache()
+    except Exception:  # data may not be loaded yet on a fresh instance
+        logging.getLogger("uvicorn").warning("analytics cache warm-up failed", exc_info=True)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     open_pool()
+    threading.Thread(target=_warm_analytics, daemon=True).start()
     yield
     close_pool()
 

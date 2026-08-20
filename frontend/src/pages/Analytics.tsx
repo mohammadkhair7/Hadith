@@ -17,17 +17,34 @@ export default function Analytics() {
   const [pairs, setPairs] = useState<any[]>([]);
   const [lengths, setLengths] = useState<any[]>([]);
   const [verbs, setVerbs] = useState<any[]>([]);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    api("/analytics/overview").then(setOv).catch(console.error);
+    setFailed(false);
+    api("/analytics/overview").then(setOv).catch(() => setFailed(true));
     api("/analytics/grades").then(setGrades).catch(() => {});
     api("/analytics/top-narrators?limit=20").then(setNarrators).catch(() => {});
     api("/analytics/top-pairs?limit=20").then(setPairs).catch(() => {});
     api("/analytics/chain-lengths").then(setLengths).catch(() => {});
     api("/analytics/verbs").then(setVerbs).catch(() => {});
-  }, []);
+  }, [attempt]);
 
-  if (!ov) return <div className="text-center py-16 text-gray-400">{t("loading")}</div>;
+  if (!ov) {
+    return (
+      <div className="text-center py-16 text-gray-400">
+        {failed ? (
+          <>
+            <div className="mb-4">{t("analytics_error")}</div>
+            <button onClick={() => setAttempt((a) => a + 1)}
+              className="px-5 py-2 rounded-lg bg-islamic-teal text-white">
+              {t("retry")}
+            </button>
+          </>
+        ) : t("loading")}
+      </div>
+    );
+  }
   const tt = ov.totals;
 
   return (
