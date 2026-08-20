@@ -120,8 +120,80 @@ def ground_books(conn, question: str) -> str:
             + "\n".join(lines))
 
 
+# genitive kunya / patronymic variants normalize to the canonical alias forms
+_TOKEN_CANON = {"ابي": "ابو", "ابا": "ابو", "وابي": "ابو", "وابو": "ابو", "ابن": "بن"}
+
+
+def ground_narrators(conn, question: str) -> str:
+    """Resolve narrator names in the question to narrator_ids via the aliases
+    table (exact n-gram match on alias_norm, else trigram similarity on
+    canonical_norm). Grounded ids let the model filter isnad_links.narrator_id
+    directly instead of guessing (or transliterating) name strings."""
+    toks = normalize_arabic(question).split()
+    canon = [_TOKEN_CANON.get(t, t) for t in toks]
+    grams: set[str] = set()
+    for seq in (toks, canon):
+        for n in (2, 3, 4):
+            for i in range(len(seq) - n + 1):
+                grams.add(" ".join(seq[i:i + n]))
+        grams |= {t for t in seq if len(t) >= 4}
+    if not grams:
+        return ""
+    rows = conn.execute("""
+        SELECT n.narrator_id, n.canonical_ar, n.canonical_norm,
+               count(il.chain_id) AS mentions
+        FROM narrator_aliases a
+        JOIN narrators n USING (narrator_id)
+        LEFT JOIN isnad_links il ON il.narrator_id = n.narrator_id
+        WHERE a.alias_norm = ANY(%s)
+        GROUP BY 1, 2, 3
+        ORDER BY mentions DESC LIMIT 5
+    """, (list(grams),)).fetchall()
+    if not rows:
+        qnorm = " ".join(canon)
+        rows = conn.execute("""
+            SELECT narrator_id, canonical_ar, canonical_norm,
+                   0 AS mentions, word_similarity(canonical_norm, %s) AS sim
+            FROM narrators
+            WHERE word_similarity(canonical_norm, %s) > 0.6
+            ORDER BY sim DESC LIMIT 3
+        """, (qnorm, qnorm)).fetchall()
+    if not rows:
+        return ""
+    lines = [f"- narrator_id={r['narrator_id']} «{r['canonical_ar']}» "
+             f"(canonical_norm='{r['canonical_norm']}', isnad mentions={r['mentions']})"
+             for r in rows]
+    return ("## Narrators referenced in the question (resolved from the aliases table)\n"
+            + "\n".join(lines)
+            + "\nFilter with isnad_links.narrator_id (join isnad_chains for the passage). "
+            "Do NOT compare name strings when a grounded id exists. If several ids are "
+            "clearly name variants of the same person (e.g. ابو هريره / ابي هريره), use "
+            "narrator_id IN (all variant ids).")
+
+
+_ARABIC_CHARS = re.compile(r"[\u0600-\u06FF]")
+
+
+def _arabic_form(question: str) -> str | None:
+    """For non-Arabic questions, get an Arabic rendering (names in standard
+    Arabic spelling) so entity grounding can match the Arabic-only data."""
+    letters = re.findall(r"[A-Za-z\u0600-\u06FF]", question)
+    if not letters or len(_ARABIC_CHARS.findall(question)) / len(letters) >= 0.5:
+        return None
+    try:
+        out = generate_json(
+            "Translate this question about a hadith corpus into Arabic. Render any "
+            "transliterated person or book names in their standard Arabic spelling "
+            "(e.g. Abu Hurayrah → أبو هريرة). "
+            'Respond with JSON: {"arabic": "<the question in Arabic>"}\n\n'
+            f"Question: {question}")
+        return out.get("arabic") or None
+    except Exception:
+        return None
+
+
 def _prompt(conn, question: str, error: str | None = None,
-            prev_sql: str | None = None) -> str:
+            prev_sql: str | None = None, arabic: str | None = None) -> str:
     parts = [
         "You translate Arabic/English questions about a hadith corpus into a single PostgreSQL SELECT query.",
         "## Schema\n" + schema_summary(conn),
@@ -131,11 +203,21 @@ def _prompt(conn, question: str, error: str | None = None,
         "(strip tashkeel, unify alef). Match book titles with LIKE on works.title_norm "
         "(titles often embed the author's name) or, better, by grounded ids when provided. "
         "A hadith = passages row with kind='unit'.",
-        f"## Question\n{question}",
+        "CRITICAL — the data content is ARABIC: every string literal that is compared "
+        "against Arabic columns (canonical_norm, alias_norm, title_norm, text_norm, "
+        "mention_norm, grade_norm...) MUST be written in normalized Arabic script "
+        "(tashkeel stripped, أ/إ/آ→ا, ة→ه, ى→ي, e.g. 'ابو هريره', 'عايشه'). "
+        "NEVER transliterate names into Latin letters ('abu hurayra' matches nothing). "
+        "If the question is in English, translate names/titles into Arabic before writing "
+        "the literal. When a grounded narrator_id or work_id/edition_id is provided above, "
+        "always prefer filtering by that id over any string comparison.",
+        f"## Question\n{question}"
+        + (f"\n(Arabic form: {arabic})" if arabic else ""),
     ]
-    grounded = ground_books(conn, question)
-    if grounded:
-        parts.insert(3, grounded)
+    ground_q = f"{question} {arabic}" if arabic else question
+    for grounded in (ground_books(conn, ground_q), ground_narrators(conn, ground_q)):
+        if grounded:
+            parts.insert(3, grounded)
     if error:
         parts.append(f"## Previous attempt failed\nSQL: {prev_sql}\nError: {error}\nFix the query.")
     return "\n\n".join(parts)
@@ -153,24 +235,28 @@ def _looks_wrong(rows: list) -> str | None:
 
 
 def run_nl2sql(conn, question: str) -> dict[str, Any]:
-    out = generate_json(_prompt(conn, question))
+    arabic = _arabic_form(question)
+    out = generate_json(_prompt(conn, question, arabic=arabic))
     sql = validate_sql(out.get("sql", ""))
     try:
         rows = _execute_readonly(conn, sql)
     except Exception as e:
         conn.rollback()
-        out = generate_json(_prompt(conn, question, error=str(e), prev_sql=sql))
+        out = generate_json(_prompt(conn, question, error=str(e), prev_sql=sql,
+                                    arabic=arabic))
         sql = validate_sql(out.get("sql", ""))
         rows = _execute_readonly(conn, sql)
     suspicion = _looks_wrong(rows)
     if suspicion:
         try:
             out2 = generate_json(_prompt(
-                conn, question, prev_sql=sql,
+                conn, question, prev_sql=sql, arabic=arabic,
                 error=suspicion + ". Recheck joins and filters: book titles embed author "
                 "names (use LIKE on title_norm or the grounded ids); hadith counting "
                 "needs kind='unit' and an edition that actually has units; shamela "
-                "editions of matn books contain pages, not units."))
+                "editions of matn books contain pages, not units; Arabic-content "
+                "literals must be normalized ARABIC script never Latin transliteration; "
+                "prefer grounded narrator_id / work_id filters over name strings."))
             sql2 = validate_sql(out2.get("sql", ""))
             rows2 = _execute_readonly(conn, sql2)
             if not _looks_wrong(rows2):

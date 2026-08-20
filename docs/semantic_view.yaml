@@ -124,3 +124,10 @@ examples:
   - q: كم حديثاً صحيحاً في القاعدة؟
     sql: >
       SELECT count(*) FROM hadith_grades WHERE grade_norm='sahih' LIMIT 1
+  - q: كم عدد أحاديث أبي هريرة؟  # names in normalized ARABIC; prefer grounded narrator_ids
+    sql: >
+      SELECT count(DISTINCT c.passage_id) AS hadiths
+      FROM isnad_links l JOIN isnad_chains c USING (chain_id)
+      WHERE l.narrator_id IN (
+        SELECT narrator_id FROM narrator_aliases
+        WHERE alias_norm IN ('ابو هريره', 'ابي هريره')) LIMIT 1
