@@ -1370,4 +1370,12 @@ JWT/OpenAI key rotations noted in §15.
 # 30,039 narrator entities created, 806,437 of 943,772 links resolved (85%). 
 # 5,884 narrators now carry rijal bios. 
 # 
+# narrators: 31527/31527 rows 
+# narrator_aliases: 31527/31527 rows 
+# narrator_assessments: 0/0 rows 
+# isnad_chains: 243639/243639 rows 
+# isnad_links: 943772/943772 rows 
+# hadith_grades: 15078/15078 rows 
+
+# Remote graph rebuilt identically (11,569 nodes / 43,651 edges)
 

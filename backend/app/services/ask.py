@@ -41,12 +41,15 @@ def ask(conn, question: str, *, lang: str = "ar") -> dict[str, Any]:
             nl = run_nl2sql(conn, question)
             result["sql"] = nl["sql"]
             result["rows"] = nl["rows"]
-            result["answer"] = _compose_from_rows(question, nl)
-            return result
+            result["enhanced"] = nl.get("enhanced")
+            if nl["rows"]:
+                result["answer"] = _compose_from_rows(question, nl)
+                return result
+            result["note"] = "sql returned no rows — fell back to retrieval"
         except Exception as e:
             conn.rollback()
             result["engine_error"] = str(e)
-            route = "semantic"                    # graceful fallback to retrieval
+        route = "semantic"                        # graceful fallback to retrieval
 
     if route == "graph":
         try:

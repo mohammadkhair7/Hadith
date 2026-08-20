@@ -45,8 +45,38 @@ tables:
     description: ربط موضوع ↔ نص (passage)
     columns: {subject_id: الموضوع, passage_id: النص, ord: الترتيب}
   narrators:
-    description: رجال الحديث (يملأ في مرحلة لاحقة — قد يكون فارغاً)
-    columns: {narrator_id: معرف, canonical_ar: الاسم, generation: الطبقة, death_year_h: سنة الوفاة هجري}
+    description: رجال الحديث (31 ألف راوٍ مستخرج من الأسانيد)
+    columns:
+      narrator_id: معرف
+      canonical_ar: الاسم
+      canonical_norm: الاسم مطبَّع
+      generation: "الجيل: صحابي | تابعي | من أتباع التابعين | ..."
+      death_year_h: سنة الوفاة هجري
+      bio_summary: ترجمة موجزة من تقريب التهذيب
+      meta: "jsonb: rijal_grade (ثقة/صدوق/...), tabaqa (1-12), places[], school"
+  isnad_chains:
+    description: سند مستخرج من نص حديث (سلسلة رواة)
+    columns:
+      chain_id: معرف
+      passage_id: الحديث
+      confidence: ثقة الاستخراج
+      sanad_end_raw: موضع نهاية السند في text_raw (بداية المتن)
+  isnad_links:
+    description: حلقة رواية داخل سند — pos=0 شيخ المصنِّف ... الأعلى فالصحابي
+    columns:
+      chain_id: السند
+      pos: الموضع في السلسلة
+      mention_ar: الاسم كما ورد
+      mention_norm: مطبَّع
+      verb: "صيغة التحمل: حدثنا | اخبرنا | عن | سمعت ..."
+      narrator_id: الراوي المحلول (nullable)
+  hadith_grades:
+    description: درجة الحديث
+    columns:
+      passage_id: الحديث
+      grade_ar: "صحيح | حسن | ضعيف | مقبول | موضوع"
+      grade_norm: "sahih | hasan | daif | maqbul | mawdu | other"
+      source: "book-convention (الصحيحان) | kalimat | scholar | manual"
   translations:
     description: ترجمات النصوص والعناوين
     columns: {obj_type: النوع, obj_id: المعرف, lang: اللغة, text: الترجمة, status: الحالة}
@@ -56,8 +86,14 @@ joins:
   - subject_links.passage_id = passages.passage_id
   - subject_links.subject_id = subjects.subject_id
   - passages.toc_node_id = toc_nodes.toc_node_id
+  - isnad_chains.passage_id = passages.passage_id
+  - isnad_links.chain_id = isnad_chains.chain_id
+  - isnad_links.narrator_id = narrators.narrator_id
+  - hadith_grades.passage_id = passages.passage_id
 notes:
   - استخدم text_norm للمطابقة النصية دائماً (المستخدم قد يكتب بلا تشكيل)
+  - "عناوين works غالباً تتضمن اسم المؤلف (مثل «فتح الباري شرح صحيح البخاري ابن حجر العسقلاني») — طابق بـ LIKE على title_norm لا بالمساواة، وفضّل المعرفات المذكورة في قسم الكتب المحلولة إن وُجد"
+  - "الحديث المفرد = صف في passages بـ kind='unit'. طبعات shamela لكتب المتون تحوي صفحات (kind='page') لا أحاديث — عند العدّ اختر الطبعة التي فيها units فعلاً"
   - "counts: استخدم count(*) مع GROUP BY، ورتّب تنازلياً عند 'الأكثر/الأعلى'"
   - hadith_num نص وليس رقماً — استخدم المقارنة النصية أو التحويل الآمن
   - أضف LIMIT دائماً (سيُفرض 200 كحد أقصى)
@@ -66,7 +102,8 @@ examples:
     sql: >
       SELECT count(*) FROM passages p JOIN editions e USING (edition_id)
       JOIN works w USING (work_id)
-      WHERE w.title_norm LIKE '%صحيح البخاري%' AND p.kind='unit' AND p.source='sunna' LIMIT 1
+      WHERE w.title_norm LIKE '%صحيح البخاري%' AND w.kind='matn'
+        AND p.kind='unit' LIMIT 1
   - q: ما أكثر عشرة موضوعات ارتباطاً بالأحاديث؟
     sql: >
       SELECT s.title, count(*) AS n FROM subject_links sl JOIN subjects s USING (subject_id)
@@ -74,3 +111,16 @@ examples:
   - q: كم كتاباً في كل مصدر؟
     sql: >
       SELECT source, count(*) AS editions FROM editions GROUP BY source ORDER BY editions DESC LIMIT 10
+  - q: من أكثر الرواة روايةً في سنن الترمذي؟
+    sql: >
+      SELECT n.canonical_ar, count(*) AS mentions
+      FROM isnad_links l
+      JOIN narrators n ON n.narrator_id = l.narrator_id
+      JOIN isnad_chains c ON c.chain_id = l.chain_id
+      JOIN passages p ON p.passage_id = c.passage_id
+      JOIN editions e USING (edition_id) JOIN works w USING (work_id)
+      WHERE w.title_norm LIKE '%سنن الترمذي%'
+      GROUP BY n.canonical_ar ORDER BY mentions DESC LIMIT 10
+  - q: كم حديثاً صحيحاً في القاعدة؟
+    sql: >
+      SELECT count(*) FROM hadith_grades WHERE grade_norm='sahih' LIMIT 1

@@ -16,13 +16,10 @@ FORBIDDEN = re.compile(
 
 GRAPH_SCHEMA = """
 Node labels:
-  Narrator {narrator_id, name, generation, death_year_h}
-  Passage  {passage_id, edition_id, hadith_num, work_title}
-  Work     {work_id, title}
+  Narrator {narrator_id, name, mentions}   -- name is normalized Arabic (no tashkeel, ابو not أبو)
 Edge types:
-  (:Narrator)-[:NARRATED_FROM {count}]->(:Narrator)   -- student -> teacher
-  (:Narrator)-[:APPEARS_IN {pos}]->(:Passage)
-  (:Passage)-[:BELONGS_TO]->(:Work)
+  (:Narrator)-[:NARRATED_FROM {count}]->(:Narrator)   -- student -> teacher; count = joint narrations
+(There are NO Passage/Work nodes in this graph — per-hadith questions belong to SQL.)
 """
 
 FEW_SHOTS = """
@@ -31,6 +28,9 @@ Cypher: MATCH (s:Narrator)-[:NARRATED_FROM]->(t:Narrator) WHERE t.name CONTAINS 
 
 Q: كم حديثاً يرويه نافع عن ابن عمر؟
 Cypher: MATCH (a:Narrator)-[r:NARRATED_FROM]->(b:Narrator) WHERE a.name CONTAINS 'نافع' AND b.name CONTAINS 'ابن عمر' RETURN r.count LIMIT 10
+
+Q: من أكثر شيوخ مالك بن أنس رواية؟
+Cypher: MATCH (s:Narrator)-[r:NARRATED_FROM]->(t:Narrator) WHERE s.name CONTAINS 'مالك بن انس' RETURN t.name, r.count ORDER BY r.count DESC LIMIT 20
 """
 
 
@@ -133,4 +133,18 @@ def run_nl2cypher(conn, question: str) -> dict[str, Any]:
         out = generate_json(_prompt(question, error=str(e), prev=cy, frame=frame))
         cy = validate_cypher(out.get("cypher", ""))
         rows = _execute_cypher(conn, cy)
+    if not rows:
+        # wrong-but-valid repair: names in the graph are normalized substrings
+        try:
+            out2 = generate_json(_prompt(
+                question, prev=cy, frame=frame,
+                error="the query executed but matched nothing — use CONTAINS with a "
+                "shorter normalized name fragment (no tashkeel, ابو not أبو, بن not ابن), "
+                "or match by narrator_id from the frame"))
+            cy2 = validate_cypher(out2.get("cypher", ""))
+            rows2 = _execute_cypher(conn, cy2)
+            if rows2:
+                cy, rows = cy2, rows2
+        except Exception:
+            conn.rollback()
     return {"cypher": cy, "rows": rows, "row_count": len(rows), "frame": frame}
