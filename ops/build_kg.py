@@ -21,7 +21,7 @@ from arabiclib.isnad import parse_isnad  # noqa: E402
 
 GRAPH = "hadith_graph"
 MIN_MENTION_COUNT = 2          # mentions seen once are kept in links but not promoted to entities
-EXTRACTOR = "rule-0.1"
+EXTRACTOR = "rule-0.2"
 
 _BAD_MENTION = re.compile(
     r"^(رسول الله|النبي|الله|ابيه|ابيها|جده|امه)\b")
@@ -37,12 +37,12 @@ def extract_chains(edition_id: int) -> dict:
         conn.execute("""
             DELETE FROM isnad_links WHERE chain_id IN (
                 SELECT chain_id FROM isnad_chains c JOIN passages p USING (passage_id)
-                WHERE p.edition_id=%s AND c.extractor=%s)
-        """, (edition_id, EXTRACTOR))
+                WHERE p.edition_id=%s)
+        """, (edition_id,))
         conn.execute("""
             DELETE FROM isnad_chains WHERE passage_id IN (
-                SELECT passage_id FROM passages WHERE edition_id=%s) AND extractor=%s
-        """, (edition_id, EXTRACTOR))
+                SELECT passage_id FROM passages WHERE edition_id=%s)
+        """, (edition_id,))
         conn.commit()
 
     n_chains = n_links = 0
@@ -53,10 +53,12 @@ def extract_chains(edition_id: int) -> dict:
             if len(p.hops) < 2 or p.confidence < 0.5:
                 continue
             chain_id = cur.execute("""
-                INSERT INTO isnad_chains (passage_id, ord, confidence, extractor, sanad_end_raw)
-                VALUES (%s, 0, %s, %s, %s) RETURNING chain_id
+                INSERT INTO isnad_chains (passage_id, ord, confidence, extractor,
+                                          sanad_end_raw, meta)
+                VALUES (%s, 0, %s, %s, %s, %s) RETURNING chain_id
             """, (r["passage_id"], p.confidence, EXTRACTOR,
-                  p.sanad_end_raw if p.sanad_end_raw > 0 else None)).fetchone()["chain_id"]
+                  p.sanad_end_raw if p.sanad_end_raw > 0 else None,
+                  json.dumps({"flags": p.flags} if p.flags else {}))).fetchone()["chain_id"]
             for hop in p.hops:
                 mention_norm = normalize_arabic(hop.mention)
                 if _BAD_MENTION.match(mention_norm):
