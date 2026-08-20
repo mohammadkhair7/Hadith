@@ -20,6 +20,13 @@ def get_passage(passage_id: int, lang: str | None = None):
             raise HTTPException(404, "passage not found")
         p.pop("tsv", None)
 
+        diac = q1(conn, """
+            SELECT payload->>'text' AS text FROM passage_annotations
+            WHERE passage_id=%s AND layer='diacritized' AND engine='neural-tashkeel'
+            LIMIT 1
+        """, (passage_id,))
+        p["text_diac"] = diac["text"] if diac else None
+
         # breadcrumbs from the TOC anchor upward
         crumbs = []
         node_id = p.get("toc_node_id")

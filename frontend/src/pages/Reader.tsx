@@ -5,7 +5,7 @@ import { api } from "../api";
 import DisplayToggles from "../components/DisplayToggles";
 import HadithText, { GradeBadge } from "../components/HadithText";
 import IsnadChain from "../components/IsnadChain";
-import { matnStart, stripTashkeel, useDisplayPrefs } from "../text";
+import { cleanText, matnStart, stripTashkeel, useDisplayPrefs } from "../text";
 
 type TocNode = {
   toc_node_id: number;
@@ -97,15 +97,22 @@ export default function Reader() {
                 <DisplayToggles prefs={prefs}
                   canMatn={boundary > 0} />
               </div>
-              {boundary > 0 || passage.kind === "unit" ? (
-                <HadithText raw={passage.text_raw || ""} sanadEndRaw={boundary} prefs={prefs} />
-              ) : passage.html && passage.source !== "shamela" ? (
-                <div className="arabic-text legacy-content"
-                  dangerouslySetInnerHTML={{
-                    __html: prefs.tashkeel ? passage.html : stripTashkeel(passage.html) }} />
-              ) : (
-                <HadithText raw={passage.text_raw || ""} prefs={prefs} />
-              )}
+              <div className="max-h-[68vh] overflow-y-auto toc-scroll pe-2 break-words">
+                {prefs.tashkeel && passage.text_diac
+                 && !(boundary > 0 || passage.kind === "unit") ? (
+                  <div className="arabic-text whitespace-pre-wrap">
+                    {cleanText(passage.text_diac)}
+                  </div>
+                ) : boundary > 0 || passage.kind === "unit" ? (
+                  <HadithText raw={passage.text_raw || ""} sanadEndRaw={boundary} prefs={prefs} />
+                ) : passage.html && passage.source !== "shamela" ? (
+                  <div className="arabic-text legacy-content"
+                    dangerouslySetInnerHTML={{
+                      __html: prefs.tashkeel ? passage.html : stripTashkeel(passage.html) }} />
+                ) : (
+                  <HadithText raw={passage.text_raw || ""} prefs={prefs} />
+                )}
+              </div>
             </article>
             {isnad.length > 0 && <IsnadChain chain={isnad[0]} />}
           </>

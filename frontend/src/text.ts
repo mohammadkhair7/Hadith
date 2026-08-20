@@ -8,6 +8,16 @@ export function stripTashkeel(s: string): string {
   return s.replace(DIACRITICS, "");
 }
 
+// crawler artifacts embedded in some source pages
+const JUNK = /AddHistory\([^)]*\)[^;\n]*;?|\[\d+\/\d+\]/g;
+// abjad page-number marker glued to the start of scanned pages ("هـ." "يب." ...)
+const ABJAD_PREFIX = /^(?:[\u0621-\u064A\u0640][\u064B-\u0652\u0670]*){1,4}\.\s*/;
+
+/** Remove source-side noise (crawler junk, leading abjad page numbers) for display. */
+export function cleanText(s: string): string {
+  return s.replace(JUNK, " ").replace(ABJAD_PREFIX, "");
+}
+
 /** Normalize one char for marker matching (diacritics removed by caller). */
 function normChar(c: string): string {
   if ("أإآٱ".includes(c)) return "ا";

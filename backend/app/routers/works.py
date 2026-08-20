@@ -107,9 +107,12 @@ def edition_passages(edition_id: int, seq: int = 0, limit: int = 1):
         rows = q(conn, """
             SELECT p.passage_id, p.edition_id, p.source, p.source_page_id, p.seq, p.kind,
                    p.hadith_num, p.part, p.page, p.toc_node_id, p.text_raw, p.html, p.meta,
-                   g.grade_ar, g.grade_norm
+                   g.grade_ar, g.grade_norm, d.payload->>'text' AS text_diac
             FROM passages p
             LEFT JOIN hadith_grades g USING (passage_id)
+            LEFT JOIN passage_annotations d
+                   ON d.passage_id = p.passage_id AND d.layer = 'diacritized'
+                  AND d.engine = 'neural-tashkeel'
             WHERE p.edition_id=%s AND p.seq >= %s
             ORDER BY p.seq LIMIT %s
         """, (edition_id, seq, limit))

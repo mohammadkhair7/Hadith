@@ -9,8 +9,18 @@ CLI (GPU venv, run from AdvancedHadith/):
     Arabic-lib\\.venv-gpu\\Scripts\\python -m arabiclib.neural.tashkeel eval
     Arabic-lib\\.venv-gpu\\Scripts\\python -m arabiclib.neural.tashkeel infer --text "قال رسول الله"
     Arabic-lib\\.venv-gpu\\Scripts\\python -m arabiclib.neural.tashkeel infer --file in.txt
+    Arabic-lib\\.venv-gpu\\Scripts\\python -m arabiclib.neural.tashkeel annotate --edition 109
+
+`annotate` is the offline batch step that precomputes a display layer
+(passage_annotations layer='diacritized'): the deployed app never runs the
+model — it only serves this stored layer. Merge policy per word:
+  - a word that already carries any diacritic keeps its original marks verbatim
+  - Quran spans (﴿...﴾ or {...}) are NEVER altered
+  - only fully-bare words receive model diacritics
 """
 import argparse
+import json
+import os
 import re
 import sys
 import time
@@ -207,6 +217,109 @@ def infer(args) -> None:
     sys.stdout.buffer.write(("\n".join(out_lines) + "\n").encode("utf-8"))
 
 
+# --- offline batch annotation (precompute display layer) -----------------
+
+_QURAN_SPAN = re.compile(r"\uFD3F[^\uFD3E]*\uFD3E|\{[^}]*\}")  # ﴿...﴾ or {...}
+_TOKEN_SPLIT = re.compile(r"(\s+)")
+
+
+@torch.no_grad()
+def _diacritize_words(model, vocab, dev, words: list[str]) -> list[str]:
+    """Diacritize bare words with sentence context, chunked near training window size."""
+    chunks: list[list[str]] = []
+    cur: list[str] = []
+    clen = 0
+    for w in words:
+        if cur and clen + 1 + len(w) > 380:
+            chunks.append(cur)
+            cur, clen = [], 0
+        cur.append(w)
+        clen += len(w) + 1
+    if cur:
+        chunks.append(cur)
+    out: list[str] = []
+    for ch in chunks:
+        s = " ".join(ch)
+        x = pad_batch([vocab.encode(s)]).to(dev)
+        labels = model(x).argmax(-1)[0][:len(s)].tolist()
+        out.extend(apply_marks(s, labels).split(" "))
+    return out
+
+
+def annotate_text(model, vocab, dev, text: str) -> str:
+    """Add model tashkeel only to fully-bare words; keep existing marks and
+    Quran spans (﴿...﴾ / {...}) untouched."""
+    protected = [(m.start(), m.end()) for m in _QURAN_SPAN.finditer(text)]
+
+    def is_protected(a: int, b: int) -> bool:
+        return any(a < pe and b > ps for ps, pe in protected)
+
+    tokens = _TOKEN_SPLIT.split(text)
+    need_idx: list[int] = []
+    offset = 0
+    for i, tok in enumerate(tokens):
+        a, b = offset, offset + len(tok)
+        offset = b
+        if (i % 2 == 0 and tok and _ARABIC_LETTER.search(tok)
+                and not _MARK.search(tok) and not is_protected(a, b)):
+            need_idx.append(i)
+    if not need_idx:
+        return text
+    marked = _diacritize_words(model, vocab, dev, [tokens[i] for i in need_idx])
+    for i, w in zip(need_idx, marked):
+        tokens[i] = w
+    return "".join(tokens)
+
+
+def _db_url() -> str:
+    url = os.environ.get("DATABASE_URL") or os.environ.get("LOCAL_PG_URL")
+    if url:
+        return url
+    root = Path(__file__).resolve().parents[3]
+    for env in (root / ".env.local", root / "backend" / ".env", root / ".env"):
+        if not env.exists():
+            continue
+        for line in env.read_text(encoding="utf-8-sig").splitlines():
+            if line.startswith(("DATABASE_URL=", "LOCAL_PG_URL=")):
+                return line.split("=", 1)[1].strip().strip('"')
+    raise SystemExit("no DATABASE_URL / LOCAL_PG_URL found")
+
+
+def annotate(args) -> None:
+    import psycopg
+    model, vocab, _ = _load_model()
+    dev = device()
+    model.to(dev)
+    t0 = time.time()
+    written = skipped = 0
+    with psycopg.connect(_db_url()) as conn:
+        sql = "SELECT passage_id, text_raw FROM passages WHERE edition_id=%s ORDER BY seq"
+        params: tuple = (args.edition,)
+        if args.limit:
+            sql += " LIMIT %s"
+            params = (args.edition, args.limit)
+        rows = conn.execute(sql, params).fetchall()
+        print(f"edition {args.edition}: {len(rows)} passages, device={dev}", flush=True)
+        for n, (pid, raw) in enumerate(rows, 1):
+            merged = annotate_text(model, vocab, dev, raw or "")
+            if merged != (raw or ""):
+                conn.execute("""
+                    INSERT INTO passage_annotations (passage_id, layer, engine, version, payload)
+                    VALUES (%s, 'diacritized', 'neural-tashkeel', '0.1', %s)
+                    ON CONFLICT (passage_id, layer, engine, version)
+                    DO UPDATE SET payload = EXCLUDED.payload, created_at = now()
+                """, (pid, json.dumps({"text": merged}, ensure_ascii=False)))
+                written += 1
+            else:
+                skipped += 1
+            if n % 200 == 0:
+                conn.commit()
+                print(f"  {n}/{len(rows)} written={written} skipped={skipped} "
+                      f"({time.time()-t0:.0f}s)", flush=True)
+        conn.commit()
+    print(f"done: written={written} skipped(no change)={skipped} in {time.time()-t0:.0f}s")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Neural tashkeel model (§12.9-B)")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -220,8 +333,11 @@ def main() -> None:
     ip = sub.add_parser("infer")
     ip.add_argument("--text")
     ip.add_argument("--file")
+    an = sub.add_parser("annotate", help="precompute diacritized layer for an edition")
+    an.add_argument("--edition", type=int, required=True)
+    an.add_argument("--limit", type=int, default=None)
     args = ap.parse_args()
-    {"train": train, "eval": evaluate, "infer": infer}[args.cmd](args)
+    {"train": train, "eval": evaluate, "infer": infer, "annotate": annotate}[args.cmd](args)
 
 
 if __name__ == "__main__":

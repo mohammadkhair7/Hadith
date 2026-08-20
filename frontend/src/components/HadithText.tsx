@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { matnStart, stripTashkeel } from "../text";
+import { cleanText, matnStart, stripTashkeel } from "../text";
 
 /** Hadith body with the sanad visually distinguished from the matn.
  *  Uses the extractor's stored raw offset when available, otherwise the
@@ -14,7 +14,8 @@ export default function HadithText({ raw, sanadEndRaw, prefs }: {
   const { t } = useTranslation();
   const [focus, setFocus] = useState<"" | "sanad" | "matn">("");
   const boundary = sanadEndRaw && sanadEndRaw > 0 ? sanadEndRaw : matnStart(raw);
-  const fmt = (s: string) => (prefs.tashkeel ? s : stripTashkeel(s));
+  // clean AFTER slicing so the sanad/matn boundary offsets stay valid
+  const fmt = (s: string) => cleanText(prefs.tashkeel ? s : stripTashkeel(s));
 
   if (boundary <= 0) {
     return <div className="arabic-text whitespace-pre-wrap">{fmt(raw)}</div>;
