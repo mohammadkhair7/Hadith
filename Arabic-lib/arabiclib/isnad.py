@@ -30,15 +30,56 @@ class IsnadParse:
     sanad_end: int                        # char offset where the matn starts (normalized text)
     hops: list[Hop] = field(default_factory=list)
     confidence: float = 0.0
+    sanad_end_raw: int = -1               # same boundary as an offset into the RAW text
+
+
+_DIACRITICS_ONE = re.compile(r"[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E8\u06EA-\u06ED\u0640]")
+_ALEF_ONE = re.compile(r"[\u0622\u0623\u0625\u0671]")
+_HAMZA_ONE = re.compile(r"[\u0624\u0626]")
+
+
+def _normalize_with_map(text: str) -> tuple[str, list[int]]:
+    """normalize_arabic with an index map: map[i] = raw index of norm char i.
+    Must mirror arabiclib.normalize.normalize_arabic exactly."""
+    out: list[str] = []
+    idx: list[int] = []
+    prev_space = True                     # collapses leading whitespace too
+    for i, c in enumerate(text):
+        if _DIACRITICS_ONE.match(c):
+            continue
+        if c.isspace():
+            if prev_space:
+                continue
+            out.append(" ")
+            idx.append(i)
+            prev_space = True
+            continue
+        prev_space = False
+        if _ALEF_ONE.match(c):
+            c = "\u0627"
+        elif c == "\u0629":
+            c = "\u0647"
+        elif c == "\u0649":
+            c = "\u064A"
+        elif _HAMZA_ONE.match(c):
+            c = "\u0621"
+        out.append(c)
+        idx.append(i)
+    # strip trailing space to match .strip()
+    while out and out[-1] == " ":
+        out.pop()
+        idx.pop()
+    return "".join(out), idx
 
 
 def parse_isnad(text: str, ner_entities: list[dict] | None = None) -> IsnadParse:
     """Rule-based isnad parse of a hadith unit. If NER person spans are
     provided (Arabic-lib annotate), mentions snap to them; otherwise the
     span between transmission verbs is used."""
-    norm = normalize_arabic(text)
+    norm, idx_map = _normalize_with_map(text)
     m = _MATN_START.search(norm)
     sanad_end = m.start() if m else min(len(norm), 300)
+    sanad_end_raw = idx_map[sanad_end] if (m and sanad_end < len(idx_map)) else -1
     sanad = norm[:sanad_end]
 
     hops: list[Hop] = []
@@ -59,4 +100,5 @@ def parse_isnad(text: str, ner_entities: list[dict] | None = None) -> IsnadParse
             conf += 0.2                    # unit starts with a transmission verb
         if m:
             conf += 0.3                    # explicit matn opener found
-    return IsnadParse(sanad_end=sanad_end, hops=hops, confidence=round(conf, 2))
+    return IsnadParse(sanad_end=sanad_end, hops=hops, confidence=round(conf, 2),
+                      sanad_end_raw=sanad_end_raw)

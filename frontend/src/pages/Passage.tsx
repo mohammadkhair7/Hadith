@@ -3,8 +3,10 @@ import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, isLoggedIn } from "../api";
 import DisplayToggles from "../components/DisplayToggles";
+import ExportBar from "../components/ExportBar";
+import HadithText, { GradeBadge } from "../components/HadithText";
 import IsnadChain from "../components/IsnadChain";
-import { displayText, matnStart, stripTashkeel, useDisplayPrefs } from "../text";
+import { matnStart, stripTashkeel, useDisplayPrefs } from "../text";
 
 export default function Passage() {
   const { t, i18n } = useTranslation();
@@ -34,6 +36,8 @@ export default function Passage() {
 
   if (!p) return <div className="text-center py-16 text-gray-400">{t("loading")}</div>;
 
+  const boundary = p.sanad_end_raw > 0 ? p.sanad_end_raw : matnStart(p.text_raw || "");
+
   return (
     <div className="max-w-4xl mx-auto">
       {p.breadcrumbs?.length > 0 && (
@@ -60,7 +64,11 @@ export default function Passage() {
               {t("part_page")}: {p.part}/{p.page}
             </span>
           )}
-          <DisplayToggles prefs={prefs} canMatn={matnStart(p.text_raw || "") > 0} />
+          <GradeBadge grade={p.grade} />
+          <DisplayToggles prefs={prefs} canMatn={boundary > 0} />
+          <ExportBar title={`${p.work_title || ""} ${p.hadith_num ? "حديث " + p.hadith_num : ""}`}
+            text={() => p.text_raw || ""}
+            html={() => `<div style="white-space:pre-wrap">${(p.text_raw || "").replace(/</g, "&lt;")}</div>`} />
           {isLoggedIn() && (
             <button onClick={favourite} disabled={saved}
               className="text-orange-accent hover:scale-110 transition-transform">
@@ -69,11 +77,13 @@ export default function Passage() {
           )}
         </div>
 
-        {p.html && p.source !== "shamela" && !prefs.matnOnly ? (
+        {boundary > 0 || p.kind === "unit" ? (
+          <HadithText raw={p.text_raw || ""} sanadEndRaw={boundary} prefs={prefs} />
+        ) : p.html && p.source !== "shamela" ? (
           <div className="arabic-text legacy-content"
             dangerouslySetInnerHTML={{ __html: prefs.tashkeel ? p.html : stripTashkeel(p.html) }} />
         ) : (
-          <div className="arabic-text whitespace-pre-wrap">{displayText(p.text_raw || "", prefs)}</div>
+          <HadithText raw={p.text_raw || ""} prefs={prefs} />
         )}
 
         {p.translation && (
@@ -99,6 +109,8 @@ export default function Passage() {
 
       {isnad.length > 0 && <IsnadChain chain={isnad[0]} />}
 
+      {isnad.length > 0 && <Mutabaat passageId={passageId!} />}
+
       {p.subjects?.length > 0 && (
         <section className="mt-6">
           <h3 className="font-bold text-deep-teal mb-2">{t("related_subjects")}</h3>
@@ -120,12 +132,42 @@ export default function Passage() {
             {others.map((e: any) => (
               <Link key={e.edition_id} to={`/read/${e.edition_id}`}
                 className="text-xs bg-orange-accent/10 text-orange-accent rounded-full px-3 py-1 hover:bg-orange-accent hover:text-white transition-colors">
-                {e.source}: {e.title_ar}
+                {t(`source_${e.source}`)}: {e.title_ar}
               </Link>
             ))}
           </div>
         </section>
       )}
     </div>
+  );
+}
+
+/** Corroborating transmissions: hadiths sharing student→teacher pairs. */
+function Mutabaat({ passageId }: { passageId: string }) {
+  const { t } = useTranslation();
+  const [rows, setRows] = useState<any[]>([]);
+  useEffect(() => {
+    setRows([]);
+    api(`/analytics/passages/${passageId}/mutabaat`).then(setRows).catch(() => {});
+  }, [passageId]);
+  if (!rows.length) return null;
+  return (
+    <section className="mt-6">
+      <h3 className="font-bold text-deep-teal mb-2">{t("mutabaat_title")}</h3>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {rows.map((r) => (
+          <Link key={r.passage_id} to={`/passage/${r.passage_id}`}
+            className="block bg-white rounded-lg shadow-sm p-3 text-xs hover:shadow border-s-2 border-islamic-teal">
+            <div className="flex justify-between mb-1">
+              <span className="font-bold text-islamic-teal font-arabic">{r.work_title}</span>
+              <span className="text-islamic-gold font-bold">
+                {r.shared_pairs} {t("mutabaat_shared")}
+              </span>
+            </div>
+            <span className="font-arabic text-gray-600">{r.preview}…</span>
+          </Link>
+        ))}
+      </div>
+    </section>
   );
 }

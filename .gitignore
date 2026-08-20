@@ -30,6 +30,8 @@ frontend/dist/
 
 # --- ML models & training artifacts (gitignored per §12.9) ---
 Arabic-lib/models/
+Arabic-lib/training/data/
+Arabic-lib/.venv-gpu/
 Arabic-lib/jars/
 checkpoints/
 runs/

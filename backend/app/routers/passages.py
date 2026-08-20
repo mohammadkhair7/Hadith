@@ -38,6 +38,17 @@ def get_passage(passage_id: int, lang: str | None = None):
             WHERE sl.passage_id=%s ORDER BY sl.ord LIMIT 30
         """, (passage_id,))
 
+        boundary = q1(conn, """
+            SELECT sanad_end_raw FROM isnad_chains
+            WHERE passage_id=%s AND sanad_end_raw IS NOT NULL
+            ORDER BY confidence DESC LIMIT 1
+        """, (passage_id,))
+        p["sanad_end_raw"] = boundary["sanad_end_raw"] if boundary else None
+
+        p["grade"] = q1(conn, """
+            SELECT grade_ar, grade_norm, source FROM hadith_grades WHERE passage_id=%s
+        """, (passage_id,))
+
         # neighbours in reading order
         p["prev"] = q1(conn, """
             SELECT passage_id, seq FROM passages

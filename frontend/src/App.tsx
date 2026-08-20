@@ -8,6 +8,7 @@ import Passage from "./pages/Passage";
 import Subjects from "./pages/Subjects";
 import Ask from "./pages/Ask";
 import Narrators from "./pages/Narrators";
+import Analytics from "./pages/Analytics";
 import Login from "./pages/Login";
 import Account from "./pages/Account";
 import AdminStatus from "./pages/AdminStatus";
@@ -26,6 +27,7 @@ export default function App() {
         <Route path="/subjects" element={<Subjects />} />
         <Route path="/ask" element={<Ask />} />
         <Route path="/narrators" element={<Narrators />} />
+        <Route path="/analytics" element={<Analytics />} />
         <Route path="/login" element={<Login />} />
         <Route path="/account" element={<Account />} />
         <Route path="/admin" element={<AdminStatus />} />

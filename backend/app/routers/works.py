@@ -105,11 +105,13 @@ def edition_passages(edition_id: int, seq: int = 0, limit: int = 1):
     limit = max(1, min(limit, 20))
     with db() as conn:
         rows = q(conn, """
-            SELECT passage_id, edition_id, source, source_page_id, seq, kind,
-                   hadith_num, part, page, toc_node_id, text_raw, html, meta
-            FROM passages
-            WHERE edition_id=%s AND seq >= %s
-            ORDER BY seq LIMIT %s
+            SELECT p.passage_id, p.edition_id, p.source, p.source_page_id, p.seq, p.kind,
+                   p.hadith_num, p.part, p.page, p.toc_node_id, p.text_raw, p.html, p.meta,
+                   g.grade_ar, g.grade_norm
+            FROM passages p
+            LEFT JOIN hadith_grades g USING (passage_id)
+            WHERE p.edition_id=%s AND p.seq >= %s
+            ORDER BY p.seq LIMIT %s
         """, (edition_id, seq, limit))
         total = q1(conn, "SELECT passage_count AS n FROM editions WHERE edition_id=%s", (edition_id,))
     return {"total": total["n"] if total else 0, "items": rows}

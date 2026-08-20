@@ -6,9 +6,16 @@ import { api } from "../api";
 type GNode = {
   narrator_id: number; name: string; mentions: number;
   generation?: string | null; death_year_h?: number | null;
+  bio_summary?: string | null; rijal_grade?: string | null;
+  tabaqa?: string | null; tabaqa_label?: string | null;
+  places?: string[] | null; school?: string | null; books?: number;
   x?: number; y?: number; vx?: number; vy?: number;
 };
-type GEdge = { student: number; teacher: number; weight: number };
+type GEdge = {
+  student: number; teacher: number; weight: number;
+  relation?: string; relation_ar?: string;
+};
+type PairSel = { student: GNode; teacher: GNode; weight: number; relation_ar?: string };
 type View = { x: number; y: number; w: number; h: number };
 
 const NEON = ["#10b981", "#3b82f6", "#facc15", "#22d3ee", "#ec4899", "#8b5cf6", "#f59e0b"];
@@ -23,6 +30,7 @@ export default function Narrators() {
   const [edges, setEdges] = useState<GEdge[]>([]);
   const [center, setCenter] = useState<number | null>(null);
   const [selected, setSelected] = useState<any>(null);
+  const [pairSel, setPairSel] = useState<PairSel | null>(null);
   const [view, setView] = useState<View>({ x: 0, y: 0, w: W, h: H });
   const [tip, setTip] = useState<{ sx: number; sy: number; html: ReactNode } | null>(null);
   const simRef = useRef<number | null>(null);
@@ -54,6 +62,7 @@ export default function Narrators() {
     });
     setNodes(m);
     setEdges(g.edges);
+    setPairSel(null);
     setSelected(await api(`/narrators/${id}`));
     startSim(m, g.edges);
   }
@@ -88,8 +97,15 @@ export default function Narrators() {
     });
     setNodes(m);
     setEdges(merged);
+    setPairSel(null);
     setSelected(await api(`/narrators/${id}`));
     startSim(m, merged);
+  }
+
+  function selectEdge(e: GEdge) {
+    const s = nodes.get(e.student), tt = nodes.get(e.teacher);
+    if (!s || !tt) return;
+    setPairSel({ student: s, teacher: tt, weight: e.weight, relation_ar: e.relation_ar });
   }
 
   function startSim(m: Map<number, GNode>, es: GEdge[]) {
@@ -182,9 +198,23 @@ export default function Narrators() {
     return (
       <>
         <div className="font-bold text-islamic-gold">{n.name}</div>
-        {n.generation && <div className="text-xs">{n.generation}</div>}
+        {n.rijal_grade && <div className="text-xs text-emerald-300">{n.rijal_grade}</div>}
+        {(n.tabaqa_label || n.generation) && (
+          <div className="text-xs">{n.tabaqa_label || n.generation}
+            {n.tabaqa ? ` (الطبقة ${n.tabaqa})` : ""}</div>
+        )}
         {n.death_year_h && <div className="text-xs">ت {n.death_year_h} هـ</div>}
-        <div className="text-xs opacity-80">{n.mentions} {t("narrators_mentions")}</div>
+        {n.places && n.places.length > 0 && (
+          <div className="text-xs">{t("narrator_places")}: {n.places.join("، ")}</div>
+        )}
+        {n.school && <div className="text-xs">{t("narrator_school")}: {n.school}</div>}
+        <div className="text-xs opacity-80">
+          {n.mentions} {t("narrators_mentions")}
+          {n.books ? ` · ${n.books} ${t("an_books")}` : ""}
+        </div>
+        {n.bio_summary && (
+          <div className="text-xs opacity-70 mt-1 line-clamp-3">{n.bio_summary}</div>
+        )}
         <div className="text-xs opacity-60 mt-1">{t("narrators_click_expand")}</div>
       </>
     );
@@ -200,7 +230,9 @@ export default function Narrators() {
           <span className="mx-1 text-xs">{t("narrated_from")}</span>
           <span className="font-bold text-islamic-gold">{tt.name}</span>
         </div>
+        {e.relation_ar && <div className="text-xs text-emerald-300">{e.relation_ar}</div>}
         <div className="text-xs opacity-80">{e.weight} {t("narration_times")}</div>
+        <div className="text-xs opacity-60 mt-1">{t("edge_click_hadiths")}</div>
       </>
     );
   }
@@ -253,11 +285,14 @@ export default function Narrators() {
                       <line x1={s.x} y1={s.y} x2={tt.x} y2={tt.y}
                         stroke="#334155" strokeWidth={Math.min(1 + e.weight / 8, 4)}
                         strokeOpacity={0.7} />
-                      {/* invisible wide hit area for hover */}
+                      {/* invisible wide hit area for hover + click */}
                       <line x1={s.x} y1={s.y} x2={tt.x} y2={tt.y}
-                        stroke="transparent" strokeWidth={10}
+                        stroke="transparent" strokeWidth={12}
+                        className="cursor-pointer"
+                        onPointerDown={(ev) => ev.stopPropagation()}
                         onMouseMove={(ev) => moveTip(ev, edgeTip(e))}
-                        onMouseLeave={() => setTip(null)} />
+                        onMouseLeave={() => setTip(null)}
+                        onClick={() => selectEdge(e)} />
                     </g>
                   );
                 })}
@@ -296,15 +331,48 @@ export default function Narrators() {
           )}
         </div>
 
-        {selected && (
-          <aside className="lg:w-80 bg-white rounded-2xl shadow p-4">
+        {pairSel ? (
+          <aside className="lg:w-80 bg-white rounded-2xl shadow p-4 flex flex-col max-h-[620px]">
+            <button onClick={() => setPairSel(null)}
+              className="self-start text-xs text-gray-400 hover:text-islamic-teal mb-1">✕</button>
+            <h2 className="font-arabic font-bold text-deep-teal border-b pb-2 mb-2">
+              <span className="text-islamic-gold">{pairSel.student.name}</span>
+              <span className="text-xs text-gray-500 mx-1">{t("narrated_from")}</span>
+              <span className="text-islamic-gold">{pairSel.teacher.name}</span>
+            </h2>
+            <div className="text-sm mb-3">
+              {pairSel.relation_ar && (
+                <div className="text-emerald-700 font-arabic">{pairSel.relation_ar}</div>
+              )}
+              <div>{pairSel.weight} {t("narration_times")}</div>
+            </div>
+            <HadithList
+              url={`/narrators/pair/${pairSel.student.narrator_id}/${pairSel.teacher.narrator_id}/hadiths`} />
+          </aside>
+        ) : selected && (
+          <aside className="lg:w-80 bg-white rounded-2xl shadow p-4 flex flex-col max-h-[620px]">
             <h2 className="font-arabic font-bold text-lg text-deep-teal border-b pb-2 mb-3">
               {selected.canonical_ar}
             </h2>
             <div className="text-sm space-y-1 mb-4">
               <div>{t("narrators_chains")}: <b>{selected.chains}</b></div>
               <div>{t("narrators_mentions")}: <b>{selected.mentions}</b></div>
+              {selected.meta?.rijal_grade && (
+                <div className="text-emerald-700 font-arabic">{selected.meta.rijal_grade}</div>
+              )}
+              {selected.meta?.tabaqa_label && (
+                <div className="font-arabic">{selected.meta.tabaqa_label}
+                  {selected.meta.tabaqa ? ` (الطبقة ${selected.meta.tabaqa})` : ""}</div>
+              )}
               {selected.death_year_h && <div>ت {selected.death_year_h} هـ</div>}
+              {selected.meta?.places?.length > 0 && (
+                <div className="font-arabic">{t("narrator_places")}: {selected.meta.places.join("، ")}</div>
+              )}
+              {selected.bio_summary && (
+                <div className="text-xs text-gray-500 font-arabic leading-relaxed border-t pt-2 mt-2">
+                  {selected.bio_summary}
+                </div>
+              )}
             </div>
             {selected.aliases?.length > 1 && (
               <div className="flex flex-wrap gap-1 mb-4">
@@ -315,7 +383,7 @@ export default function Narrators() {
                 ))}
               </div>
             )}
-            <NarratorHadiths id={selected.narrator_id} />
+            <HadithList url={`/narrators/${selected.narrator_id}/hadiths`} />
           </aside>
         )}
       </div>
@@ -323,24 +391,60 @@ export default function Narrators() {
   );
 }
 
-function NarratorHadiths({ id }: { id: number }) {
+const PAGE = 50;
+
+/** Unlimited hadith list: loads pages of 50 and appends more as the user
+ *  scrolls to the bottom (vertical scrollbar, no cap). */
+function HadithList({ url }: { url: string }) {
   const { t } = useTranslation();
-  const [data, setData] = useState<any>(null);
-  useEffect(() => { api(`/narrators/${id}/hadiths?limit=5`).then(setData); }, [id]);
-  if (!data) return null;
+  const [items, setItems] = useState<any[]>([]);
+  const [total, setTotal] = useState<number | null>(null);
+  const loadingRef = useRef(false);
+
+  async function load(offset: number) {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
+    try {
+      const d: any = await api(`${url}?limit=${PAGE}&offset=${offset}`);
+      setTotal(d.total);
+      setItems((prev) => (offset === 0 ? d.items : [...prev, ...d.items]));
+    } finally {
+      loadingRef.current = false;
+    }
+  }
+
+  useEffect(() => {
+    setItems([]);
+    setTotal(null);
+    load(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url]);
+
+  function onScroll(e: React.UIEvent<HTMLDivElement>) {
+    const el = e.currentTarget;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 60
+        && total !== null && items.length < total) {
+      load(items.length);
+    }
+  }
+
+  if (total === null) return <div className="text-xs text-gray-400">{t("loading")}</div>;
   return (
-    <div>
+    <div className="flex flex-col min-h-0 flex-1">
       <h3 className="font-bold text-sm text-deep-teal mb-2">
-        {t("narrators_hadiths")} ({data.total})
+        {t("narrators_hadiths")} ({total})
       </h3>
-      <div className="space-y-2">
-        {data.items.map((h: any) => (
+      <div onScroll={onScroll} className="space-y-2 overflow-y-auto flex-1 min-h-0 pe-1">
+        {items.map((h: any) => (
           <Link key={h.passage_id} to={`/passage/${h.passage_id}`}
             className="block text-xs bg-islamic-light rounded-lg p-2 hover:bg-islamic-teal/10">
             <span className="text-islamic-gold font-bold">#{h.hadith_num}</span>
-            <span className="font-arabic"> {h.preview.slice(0, 90)}…</span>
+            <span className="font-arabic"> {(h.preview || "").slice(0, 90)}…</span>
           </Link>
         ))}
+        {items.length < (total || 0) && (
+          <div className="text-center text-xs text-gray-400 py-1">…</div>
+        )}
       </div>
     </div>
   );

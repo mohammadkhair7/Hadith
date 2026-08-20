@@ -37,6 +37,29 @@ def src_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
+_GRADE_MAP = {"sahih": ("صحيح", "sahih"), "hasan": ("حسن", "hasan"),
+              "daif": ("ضعيف", "daif"), "da'if": ("ضعيف", "daif"),
+              "maqbul": ("مقبول", "maqbul"), "mawdu": ("موضوع", "mawdu")}
+
+
+def _harvest_grade(conn, passage_id: int, meta: dict) -> None:
+    """Kalimat grade -> hadith_grades (never overrides book-convention/manual)."""
+    key = (meta.get("grade_en") or "").split("-")[0].split("(")[0].strip().lower()
+    mapped = next((v for k, v in _GRADE_MAP.items() if key.startswith(k)), None)
+    if not mapped:
+        return
+    conn.execute("""
+        INSERT INTO hadith_grades (passage_id, grade_ar, grade_norm, source, meta)
+        VALUES (%s, %s, %s, 'kalimat', %s)
+        ON CONFLICT (passage_id) DO UPDATE
+            SET grade_ar=EXCLUDED.grade_ar, grade_norm=EXCLUDED.grade_norm,
+                meta=EXCLUDED.meta, updated_at=now()
+            WHERE hadith_grades.source NOT IN ('book-convention', 'manual')
+    """, (passage_id, mapped[0], mapped[1],
+          json.dumps({"grade_en": meta.get("grade_en"),
+                      "kalimat_id": meta.get("kalimat_id")})))
+
+
 def _token_overlap(a_norm: str, b_norm: str) -> float:
     ta, tb = set(a_norm.split()), set(b_norm.split())
     if not ta or not tb:
@@ -131,6 +154,7 @@ def translate_passage(conn, passage_id: int, lang: str = "en",
         k = kalimat_lookup(_matn_of(p["text_raw"]))
         if k:
             source, text, status, meta = "kalimat", k["en_text"], "reviewed", k["meta"]
+            _harvest_grade(conn, passage_id, meta)
     if text is None:
         text = gemini_translate(p["text_raw"], lang)
         source = "gemini-2.5-flash"

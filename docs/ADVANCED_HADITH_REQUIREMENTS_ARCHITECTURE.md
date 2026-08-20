@@ -1363,3 +1363,11 @@ Earlier decisions D1–D10 remain in force as recorded in `DECISIONS.md`.
 **Next step: Phase 0** — AGE image swap, Redis vector verification, repo bootstrap
 (`.gitignore` first: databases, `.env` files incl. `Grammar/**/.env`, models), and the
 JWT/OpenAI key rotations noted in §15.
+
+
+
+##### NOTEs:
+# 30,039 narrator entities created, 806,437 of 943,772 links resolved (85%). 
+# 5,884 narrators now carry rijal bios. 
+# 
+

@@ -2,6 +2,7 @@ import { FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { api } from "../api";
+import ExportBar from "../components/ExportBar";
 
 export default function Ask() {
   const { t, i18n } = useTranslation();
@@ -53,10 +54,16 @@ export default function Ask() {
       {res && (
         <div className="space-y-4">
           <div className="bg-white rounded-xl shadow-lg p-6 border-t-4 border-islamic-gold">
-            <div className="text-xs text-gray-400 mb-2" dir="ltr">
-              route: {res.route}
-              {res.note && ` · ${res.note}`}
-              {res.engine_error && ` · fell back (${res.engine_error.slice(0, 80)})`}
+            <div className="text-xs text-gray-400 mb-2 flex items-center gap-2 flex-wrap" dir="ltr">
+              <span>
+                route: {res.route}
+                {res.note && ` · ${res.note}`}
+                {res.engine_error && ` · fell back (${res.engine_error.slice(0, 80)})`}
+              </span>
+              <ExportBar title={q.slice(0, 60)}
+                text={() => `${q}\n\n${res.answer}\n\n${(res.citations || []).map(
+                  (c: any, i: number) => `[${i + 1}] ${c.work_title}${c.hadith_num ? " #" + c.hadith_num : ""}`
+                ).join("\n")}`} />
             </div>
             <div className="arabic-text whitespace-pre-wrap">{res.answer}</div>
           </div>

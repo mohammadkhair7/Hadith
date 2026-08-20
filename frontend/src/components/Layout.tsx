@@ -43,6 +43,7 @@ export default function Layout() {
             <NavLink to="/subjects" className={link}>{t("nav_subjects")}</NavLink>
             <NavLink to="/ask" className={link}>{t("nav_ask")}</NavLink>
             <NavLink to="/narrators" className={link}>{t("nav_narrators")}</NavLink>
+            <NavLink to="/analytics" className={link}>{t("nav_analytics")}</NavLink>
             {isLoggedIn() && <NavLink to="/account" className={link}>{t("nav_account")}</NavLink>}
             {isLoggedIn() && <NavLink to="/admin" className={link}>{t("nav_admin")}</NavLink>}
           </nav>

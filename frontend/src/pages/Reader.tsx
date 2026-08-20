@@ -3,8 +3,9 @@ import { useTranslation } from "react-i18next";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import DisplayToggles from "../components/DisplayToggles";
+import HadithText, { GradeBadge } from "../components/HadithText";
 import IsnadChain from "../components/IsnadChain";
-import { displayText, matnStart, stripTashkeel, useDisplayPrefs } from "../text";
+import { matnStart, stripTashkeel, useDisplayPrefs } from "../text";
 
 type TocNode = {
   toc_node_id: number;
@@ -49,6 +50,10 @@ export default function Reader() {
     window.scrollTo({ top: 0 });
   }
 
+  const boundary = passage
+    ? (isnad[0]?.sanad_end_raw > 0 ? isnad[0].sanad_end_raw : matnStart(passage.text_raw || ""))
+    : -1;
+
   return (
     <div className="flex gap-6">
       <aside className="w-72 shrink-0 hidden md:block">
@@ -79,6 +84,7 @@ export default function Reader() {
                     {t("hadith_no")} {passage.hadith_num}
                   </span>
                 )}
+                {passage.grade_ar && <GradeBadge grade={passage} />}
                 {passage.part && (
                   <span className="bg-islamic-teal/10 text-islamic-teal rounded-full px-3 py-1">
                     {t("part_page")}: {passage.part}/{passage.page}
@@ -88,16 +94,17 @@ export default function Reader() {
                   className="text-islamic-teal underline decoration-dotted">
                   ↗
                 </Link>
-                <DisplayToggles prefs={prefs} canMatn={matnStart(passage.text_raw || "") > 0} />
+                <DisplayToggles prefs={prefs}
+                  canMatn={boundary > 0} />
               </div>
-              {passage.html && passage.source !== "shamela" && !prefs.matnOnly ? (
+              {boundary > 0 || passage.kind === "unit" ? (
+                <HadithText raw={passage.text_raw || ""} sanadEndRaw={boundary} prefs={prefs} />
+              ) : passage.html && passage.source !== "shamela" ? (
                 <div className="arabic-text legacy-content"
                   dangerouslySetInnerHTML={{
                     __html: prefs.tashkeel ? passage.html : stripTashkeel(passage.html) }} />
               ) : (
-                <div className="arabic-text whitespace-pre-wrap">
-                  {displayText(passage.text_raw || "", prefs)}
-                </div>
+                <HadithText raw={passage.text_raw || ""} prefs={prefs} />
               )}
             </article>
             {isnad.length > 0 && <IsnadChain chain={isnad[0]} />}

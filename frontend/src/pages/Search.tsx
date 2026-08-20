@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api";
+import ExportBar from "../components/ExportBar";
+
+const stripTags = (s: string) => (s || "").replace(/<[^>]+>/g, "");
 
 const SOURCES = ["", "sunna", "shamela", "alifta"];
 
@@ -63,8 +66,16 @@ export default function Search() {
 
       {result && !loading && (
         <>
-          <div className="text-sm text-gray-500 mb-3">
-            {result.total.toLocaleString("en")} {t("search_results")}
+          <div className="text-sm text-gray-500 mb-3 flex items-center gap-3 flex-wrap">
+            <span>{result.total.toLocaleString("en")} {t("search_results")}</span>
+            {result.items.length > 0 && (
+              <ExportBar title={`${t("nav_search")}: ${q}`}
+                text={() => result.items.map((r: any) =>
+                  `${r.work_title}${r.hadith_num ? " #" + r.hadith_num : ""}\n${stripTags(r.snippet)}\n`).join("\n")}
+                csv={() => [[t("nav_books"), t("hadith_no"), t("filter_all_sources"), t("nav_search")],
+                  ...result.items.map((r: any) =>
+                    [r.work_title, r.hadith_num, r.source, stripTags(r.snippet)])]} />
+            )}
             {result.coverage &&
               result.coverage.editions_with_embeddings < result.coverage.editions_in_scope && (
               <span className="ms-3 text-orange-accent">
