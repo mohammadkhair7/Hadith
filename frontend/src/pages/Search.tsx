@@ -6,7 +6,7 @@ import ExportBar from "../components/ExportBar";
 
 const stripTags = (s: string) => (s || "").replace(/<[^>]+>/g, "");
 
-const SOURCES = ["", "sunna", "shamela", "alifta"];
+const SOURCES = ["", "sunna", "shamela"];
 
 export default function Search() {
   const { t } = useTranslation();

@@ -72,6 +72,9 @@ def knn(query: str, *, source: str | None = None, edition_id: int | None = None,
     filters = []
     if source:
         filters.append(f"@source:{{{source}}}")
+    else:
+        # the alifta archive is excluded from "all sources" searches
+        filters.append("-@source:{alifta}")
     if kind:
         filters.append(f"@kind:{{{kind}}}")
     if edition_id:
@@ -124,6 +127,8 @@ def coverage_notice(conn, *, source: str | None, edition_id: int | None) -> dict
     if source:
         where.append("e.source = %s")
         params.append(source)
+    else:
+        where.append("e.source <> 'alifta'")
     if edition_id:
         where.append("e.edition_id = %s")
         params.append(edition_id)
