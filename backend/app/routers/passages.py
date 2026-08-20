@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
 from ..db import db, q, q1
+from ..services.classify import TRANSMISSION_CLASSES, transmission_class
 from ..services.diacritics import from_html
 
 router = APIRouter(tags=["passages"])
@@ -60,6 +61,23 @@ def get_passage(passage_id: int, lang: str | None = None):
         p["grade"] = q1(conn, """
             SELECT grade_ar, grade_norm, source FROM hadith_grades WHERE passage_id=%s
         """, (passage_id,))
+
+        p["hadith_type"] = q1(conn, """
+            SELECT type_norm, type_ar, confidence FROM hadith_types WHERE passage_id=%s
+        """, (passage_id,))
+
+        # means-of-transmission classes present in this passage's isnad
+        tverbs = q(conn, """
+            SELECT DISTINCT l.verb FROM isnad_chains c
+            JOIN isnad_links l USING (chain_id)
+            WHERE c.passage_id=%s AND l.verb IS NOT NULL
+        """, (passage_id,))
+        seen: dict[str, dict] = {}
+        for row in tverbs:
+            key = transmission_class(row["verb"])
+            if key and key not in seen:
+                seen[key] = {"key": key, "ar": TRANSMISSION_CLASSES[key]["ar"]}
+        p["transmission"] = list(seen.values())
 
         # neighbours in reading order
         p["prev"] = q1(conn, """

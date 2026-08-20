@@ -2,6 +2,7 @@
 optional exact-tashkeel post-filter over text_raw. Snippets via ts_headline."""
 from typing import Any
 
+from .classify import transmission_verbs
 from .normalize import normalize_arabic
 
 
@@ -14,6 +15,8 @@ def keyword_search(
     edition_id: int | None = None,
     work_kind: str | None = None,
     subject_id: int | None = None,
+    transmission: str | None = None,
+    hadith_type: str | None = None,
     limit: int = 20,
     offset: int = 0,
 ) -> dict[str, Any]:
@@ -46,6 +49,19 @@ def keyword_search(
             "AND sl.subject_id = %(subject_id)s)"
         )
         params["subject_id"] = subject_id
+    if transmission:
+        # class key (sama/ikhbar/inba/ananah) or a raw verb form
+        where.append(
+            "EXISTS (SELECT 1 FROM isnad_chains c JOIN isnad_links l USING (chain_id) "
+            "WHERE c.passage_id = p.passage_id AND l.verb = ANY(%(tverbs)s))"
+        )
+        params["tverbs"] = transmission_verbs(transmission)
+    if hadith_type:
+        where.append(
+            "EXISTS (SELECT 1 FROM hadith_types ht WHERE ht.passage_id = p.passage_id "
+            "AND ht.type_norm = %(htype)s)"
+        )
+        params["htype"] = hadith_type
 
     where_sql = " AND ".join(where)
     total = conn.execute(

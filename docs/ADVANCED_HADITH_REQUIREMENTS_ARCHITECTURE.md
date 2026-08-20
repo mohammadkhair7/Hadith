@@ -547,6 +547,36 @@ graph LR
 - Toggles: exact-tashkeel mode, whole-word vs prefix, scope (collections/books/kinds),
   subject filter; sortable, paginated result table with snippet highlighting.
 
+### 8.5 Multi-dimensional classification facets (implemented 2026-08-20)
+
+Two additional classification dimensions, both queryable in keyword/exact search
+(`transmission=`, `hadith_type=` params) and shown as chips on the passage page;
+`GET /classify/taxonomy` serves the facet lists with corpus counts.
+
+1. **Means of transmission (طرق التحمل)** — derived at query time from
+   `isnad_links.verb` (already populated by the chain extractor, including
+   copyists' abbreviations ثنا/نا/انا/ابنا):
+   - سماع: حدثنا، حدثني، ثنا، نا، سمعت، سمع (~336K chains)
+   - إخبار: أخبرنا، أخبرني، انا، ابنا (~93K)
+   - إنباء: أنبأنا، أنبأ (~16K)
+   - عنعنة: عن (~235K)
+   Mapping lives in `backend/app/services/classify.py::TRANSMISSION_CLASSES`;
+   a raw verb form is also accepted as its own filter value.
+2. **Hadith type (نوع الحديث)** — rule classifier v0.1
+   (`classify_hadith_type`) over the sanad tail + matn head (the attribution
+   «عن النبي ﷺ قال» usually sits at the end of the sanad), with narrator
+   generation (صحابي/تابعي) as fallback signal. Stored in `hadith_types`
+   (populated by `ops/classify_hadith_types.py`, idempotent, local+Railway).
+   Corpus distribution (257,094 chains → 192,458 classified, 75%):
+   qudsi 1,712 · marfu_qawli 89,130 · marfu_fili 34,340 · marfu 60,144 ·
+   mawquf 695 · maqtu 6,437. «قال الله : ﴿…﴾» is guarded as Quran citation,
+   not قدسي. Taxonomy follows the alifta.net نوع الحديث tree
+   (`Alifta.chat/data/raw/viewsubjecttree.html`, `definitions.html`).
+
+Chapter/topic categorization (the third dimension) was already served by the
+`subjects`/`subject_links` load from hadith.db (21,994 subjects, 1.14M links):
+subject tree browse, per-passage subject chips, and `subject_id=` search filter.
+
 ---
 
 ## 9. Narrator knowledge graph (رجال الحديث) — construction plan

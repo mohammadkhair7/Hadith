@@ -1,5 +1,5 @@
 -- ============================================================================
--- AdvancedHadith unified schema (ARCH Â§6.2) â Postgres 16 + Apache AGE
+-- AdvancedHadith unified schema (ARCH ÃÂ§6.2) Ã¢ÂÂ Postgres 16 + Apache AGE
 -- Idempotent: safe to re-run (IF NOT EXISTS everywhere).
 -- ============================================================================
 
@@ -10,7 +10,7 @@ CREATE EXTENSION IF NOT EXISTS unaccent;
 
 -- ----------------------------------------------------------------------------
 -- works & editions
--- A "work" is the abstract book (e.g. ØµØ­ÙØ­ Ø§ÙØ¨Ø®Ø§Ø±Ù); an "edition" is one
+-- A "work" is the abstract book (e.g. ÃÂµÃÂ­ÃÂÃÂ­ ÃÂ§ÃÂÃÂ¨ÃÂ®ÃÂ§ÃÂ±ÃÂ); an "edition" is one
 -- source's copy of it (sunna crawl, Shamela CSV, alifta archive page set).
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS works (
@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS toc_nodes (
 CREATE INDEX IF NOT EXISTS toc_edition_parent ON toc_nodes (edition_id, parent_id, ord);
 
 -- ----------------------------------------------------------------------------
--- passages: the single text-unit table for all three sources (Â§6.1 principle 1)
+-- passages: the single text-unit table for all three sources (ÃÂ§6.1 principle 1)
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS passages (
     passage_id     bigserial PRIMARY KEY,
@@ -66,8 +66,8 @@ CREATE TABLE IF NOT EXISTS passages (
     seq            int NOT NULL,              -- reading order within the edition
     kind           text NOT NULL DEFAULT 'page',  -- unit | page
     hadith_num     text,
-    part           text,                      -- Ø¬Ø²Ø¡
-    page           text,                      -- ØµÙØ­Ø© (printed)
+    part           text,                      -- ÃÂ¬ÃÂ²ÃÂ¡
+    page           text,                      -- ÃÂµÃÂÃÂ­ÃÂ© (printed)
     toc_node_id    bigint,                    -- nearest TOC anchor when known
     text_raw       text NOT NULL DEFAULT '',  -- original (tashkeel preserved)
     text_norm      text NOT NULL DEFAULT '',  -- project-standard normalization
@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS subject_links (
 CREATE INDEX IF NOT EXISTS subject_links_passage ON subject_links (passage_id);
 
 -- ----------------------------------------------------------------------------
--- narrators (Ø±Ø¬Ø§Ù Ø§ÙØ­Ø¯ÙØ«) â populated in Phase 6
+-- narrators (ÃÂ±ÃÂ¬ÃÂ§ÃÂ ÃÂ§ÃÂÃÂ­ÃÂ¯ÃÂÃÂ«) Ã¢ÂÂ populated in Phase 6
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS narrators (
     narrator_id   serial PRIMARY KEY,
@@ -137,8 +137,8 @@ CREATE INDEX IF NOT EXISTS aliases_norm ON narrator_aliases (alias_norm);
 CREATE TABLE IF NOT EXISTS narrator_assessments (
     assessment_id bigserial PRIMARY KEY,
     narrator_id   int NOT NULL REFERENCES narrators,
-    critic        text,                       -- e.g. Ø§Ø¨Ù Ø­Ø¨Ø§Ù
-    grade         text,                       -- e.g. Ø«ÙØ©
+    critic        text,                       -- e.g. ÃÂ§ÃÂ¨ÃÂ ÃÂ­ÃÂ¨ÃÂ§ÃÂ
+    grade         text,                       -- e.g. ÃÂ«ÃÂÃÂ©
     quote         text,
     src_passage   bigint REFERENCES passages,
     meta          jsonb DEFAULT '{}'::jsonb
@@ -161,7 +161,7 @@ CREATE TABLE IF NOT EXISTS isnad_links (
     pos          int NOT NULL,                -- 0 = collector side
     mention_ar   text NOT NULL,
     mention_norm text NOT NULL,
-    verb         text,                        -- Ø­Ø¯Ø«ÙØ§ | Ø£Ø®Ø¨Ø±ÙØ§ | Ø¹Ù ...
+    verb         text,                        -- ÃÂ­ÃÂ¯ÃÂ«ÃÂÃÂ§ | ÃÂ£ÃÂ®ÃÂ¨ÃÂ±ÃÂÃÂ§ | ÃÂ¹ÃÂ ...
     narrator_id  int REFERENCES narrators,    -- resolved entity (nullable until resolution)
     confidence   real DEFAULT 0,
     PRIMARY KEY (chain_id, pos)
@@ -170,7 +170,7 @@ CREATE INDEX IF NOT EXISTS isnad_links_narrator ON isnad_links (narrator_id);
 CREATE INDEX IF NOT EXISTS isnad_links_mention ON isnad_links (mention_norm);
 
 -- ----------------------------------------------------------------------------
--- translations (Â§11) â object/field/language grid with review workflow
+-- translations (ÃÂ§11) Ã¢ÂÂ object/field/language grid with review workflow
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS translations (
     obj_type   text NOT NULL,                 -- passage | work | toc | subject | narrator
@@ -272,7 +272,7 @@ CREATE TABLE IF NOT EXISTS etl_state (
     updated_at timestamptz DEFAULT now()
 );
 
--- hadith grades (ÕÍíÍ / ÍÓä / ÖÚíÝ ...) from book convention, Kalimat, or scholars
+-- hadith grades (ÃÃÃ­Ã / ÃÃÃ¤ / ÃÃÃ­Ã ...) from book convention, Kalimat, or scholars
 CREATE TABLE IF NOT EXISTS hadith_grades (
     passage_id  bigint PRIMARY KEY REFERENCES passages ON DELETE CASCADE,
     grade_ar    text,
@@ -284,3 +284,15 @@ CREATE TABLE IF NOT EXISTS hadith_grades (
 CREATE INDEX IF NOT EXISTS grades_norm ON hadith_grades (grade_norm);
 -- sanad/matn boundary as a raw-text offset (matn highlighting)
 ALTER TABLE isnad_chains ADD COLUMN IF NOT EXISTS sanad_end_raw int;
+
+-- hadith type classification (نوع الحديث): qudsi / marfu (qawli|fili) /
+-- mawquf / maqtu — rule classifier over the matn opening + narrator generation
+CREATE TABLE IF NOT EXISTS hadith_types (
+    passage_id  bigint PRIMARY KEY REFERENCES passages ON DELETE CASCADE,
+    type_norm   text NOT NULL,             -- qudsi|marfu_qawli|marfu_fili|marfu|mawquf|maqtu
+    type_ar     text NOT NULL,
+    method      text NOT NULL DEFAULT 'rule-0.1',
+    confidence  real DEFAULT 0,
+    updated_at  timestamptz DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS hadith_types_norm ON hadith_types (type_norm);

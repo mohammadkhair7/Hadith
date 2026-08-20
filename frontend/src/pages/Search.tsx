@@ -15,10 +15,17 @@ export default function Search() {
   const [input, setInput] = useState(q);
   const [mode, setMode] = useState<"keyword" | "exact" | "semantic" | "hybrid">("keyword");
   const [source, setSource] = useState("");
+  const [transmission, setTransmission] = useState("");
+  const [htype, setHtype] = useState("");
+  const [taxonomy, setTaxonomy] = useState<any>(null);
   const [page, setPage] = useState(0);
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const limit = 20;
+
+  useEffect(() => {
+    api("/classify/taxonomy").then(setTaxonomy).catch(() => {});
+  }, []);
 
   useEffect(() => {
     setInput(q);
@@ -26,11 +33,15 @@ export default function Search() {
     setLoading(true);
     const sp = new URLSearchParams({ q, mode, limit: String(limit), offset: String(page * limit) });
     if (source) sp.set("source", source);
+    if (transmission) sp.set("transmission", transmission);
+    if (htype) sp.set("hadith_type", htype);
     api(`/search?${sp}`)
       .then(setResult)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [q, mode, source, page]);
+  }, [q, mode, source, transmission, htype, page]);
+
+  const facetsActive = mode === "keyword" || mode === "exact";
 
   return (
     <div>
@@ -57,6 +68,32 @@ export default function Search() {
             <option key={s} value={s}>{s ? t(`source_${s}`) : t("filter_all_sources")}</option>
           ))}
         </select>
+        {facetsActive && taxonomy && (
+          <>
+            <select value={transmission}
+              onChange={(e) => { setTransmission(e.target.value); setPage(0); }}
+              className="border rounded-xl px-3 text-sm font-arabic"
+              title={t("transmission_title") as string}>
+              <option value="">{t("filter_any_transmission")}</option>
+              {taxonomy.transmission.map((c: any) => (
+                <option key={c.key} value={c.key}>
+                  {c.ar} — {c.chains.toLocaleString("en")}
+                </option>
+              ))}
+            </select>
+            <select value={htype}
+              onChange={(e) => { setHtype(e.target.value); setPage(0); }}
+              className="border rounded-xl px-3 text-sm font-arabic"
+              title={t("hadith_type_title") as string}>
+              <option value="">{t("filter_any_type")}</option>
+              {taxonomy.hadith_types.map((c: any) => (
+                <option key={c.key} value={c.key}>
+                  {c.ar} — {c.passages.toLocaleString("en")}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
         <button className="bg-islamic-teal text-white rounded-xl px-6 hover:bg-deep-teal transition-colors">
           {t("nav_search")}
         </button>

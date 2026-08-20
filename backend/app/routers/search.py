@@ -14,6 +14,8 @@ def search(
     edition_id: int | None = None,
     kind: str | None = None,
     subject_id: int | None = None,
+    transmission: str | None = None,
+    hadith_type: str | None = None,
     limit: int = 20,
     offset: int = 0,
 ):
@@ -24,7 +26,8 @@ def search(
                 conn, q,
                 exact=(mode == "exact"),
                 source=source, edition_id=edition_id, work_kind=kind,
-                subject_id=subject_id, limit=limit, offset=offset,
+                subject_id=subject_id, transmission=transmission,
+                hadith_type=hadith_type, limit=limit, offset=offset,
             )
             result["mode"] = mode
             return result

@@ -7,8 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .db import close_pool, open_pool
-from .routers import (admin, analytics, ask, auth, narrators, passages, search,
-                      subjects, user_items, works)
+from .routers import (admin, analytics, ask, auth, classify, narrators, passages,
+                      search, subjects, user_items, works)
 
 
 def _warm_analytics() -> None:
@@ -53,6 +53,7 @@ app.include_router(admin.router, prefix=API)
 app.include_router(ask.router, prefix=API)
 app.include_router(narrators.router, prefix=API)
 app.include_router(analytics.router, prefix=API)
+app.include_router(classify.router, prefix=API)
 
 
 @app.get(f"{API}/health")

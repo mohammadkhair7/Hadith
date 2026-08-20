@@ -68,6 +68,18 @@ export default function Passage() {
             </span>
           )}
           <GradeBadge grade={p.grade} />
+          {p.hadith_type && (
+            <span className="bg-deep-teal text-islamic-gold rounded-full px-3 py-1 font-arabic"
+              title={t("hadith_type_title") as string}>
+              {p.hadith_type.type_ar}
+            </span>
+          )}
+          {p.transmission?.map((tc: any) => (
+            <span key={tc.key} className="bg-orange-accent/15 text-orange-accent rounded-full px-3 py-1 font-arabic"
+              title={t("transmission_title") as string}>
+              {tc.ar}
+            </span>
+          ))}
           <DisplayToggles prefs={prefs} canMatn={hasChains} />
           <ExportBar title={`${p.work_title || ""} ${p.hadith_num ? "حديث " + p.hadith_num : ""}`}
             text={() => p.text_raw || ""}
