@@ -57,8 +57,11 @@ def build_tashkeel(target_windows: int) -> None:
     pool.open()
     rows_out: list[dict] = []
     with pool.connection() as conn:
+        # the replaced Bukhari (91, Dar al-Sha'b, fully vocalized) leads so its
+        # clean tashkeel is guaranteed a large share of the corpus
         eds = conn.execute("""
             SELECT edition_id FROM editions WHERE source='shamela'
+            ORDER BY (edition_id = 91) DESC, edition_id
         """).fetchall()
         for e in eds:
             if len(rows_out) >= target_windows:
@@ -147,7 +150,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--task", default="all",
                     choices=["all", "tashkeel", "pos", "indexing"])
-    ap.add_argument("--tashkeel-windows", type=int, default=60000)
+    ap.add_argument("--tashkeel-windows", type=int, default=70000)
     ap.add_argument("--pos-passages", type=int, default=4000)
     ap.add_argument("--indexing-units", type=int, default=40000)
     ap.add_argument("--indexing-headings", type=int, default=8000)

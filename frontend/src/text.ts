@@ -28,8 +28,13 @@ function normChar(c: string): string {
   return c;
 }
 
-const MATN_MARKERS =
-  /(قال|يقول|سمعت)\s+(رسول\s+الله|النبي)|ان\s+(رسول\s+الله|النبي)\s|عن\s+النبي\s/g;
+// strong markers embed a speech verb; weak ones (عن/أن + النبي) also occur
+// descriptively in commentary, so they only count when a speech cue follows
+const MATN_STRONG = /(قال|يقول|فقال|سمعت)\s+(رسول\s+الله|النبي)/g;
+const MATN_WEAK = /(عن|ان)\s+(النبي|رسول\s+الله)\s/g;
+// cue expected shortly after a weak marker (past the ﷺ honorific):
+// a speech/report verb or an explicit quote opener
+const SPEECH_CUE = /^.{0,45}?(قال|يقول|فقال|سئل|نهي|امر|اوصي|خطب|كتب|:|«)/;
 
 /** Diacritics-insensitive normalized view of a string plus an index map
  *  back to the original offsets. */
@@ -47,24 +52,65 @@ function normWithMap(raw: string): { norm: string; map: number[] } {
 
 /**
  * Heuristic matn boundary: index in the RAW string where the matn begins
- * (the last Prophet-speech marker). Returns -1 when not found or when the
- * remainder would be too short to be a matn.
+ * (the FIRST valid Prophet-speech marker, mirroring the DB extractor).
+ * Weak markers (عن النبي / أن رسول الله) are only accepted when followed by
+ * a speech cue — a bare honorific mention in commentary is NOT a matn start.
+ * Returns -1 when not found or when the remainder would be too short.
  */
 export function matnStart(raw: string): number {
   const { norm, map } = normWithMap(raw);
-  let last = -1;
+  let best = -1;
   let m: RegExpExecArray | null;
-  MATN_MARKERS.lastIndex = 0;
-  while ((m = MATN_MARKERS.exec(norm)) !== null) last = m.index;
-  if (last < 0 || norm.length - last < 25 || last === 0) return -1;
-  return map[last];
+  MATN_STRONG.lastIndex = 0;
+  while ((m = MATN_STRONG.exec(norm)) !== null) {
+    best = m.index;
+    break;
+  }
+  MATN_WEAK.lastIndex = 0;
+  while ((m = MATN_WEAK.exec(norm)) !== null) {
+    if (best >= 0 && m.index >= best) break;
+    if (SPEECH_CUE.test(norm.slice(m.index + m[0].length, m.index + m[0].length + 60))) {
+      best = m.index;
+      break;
+    }
+  }
+  if (best < 0 || norm.length - best < 25 || best === 0) return -1;
+  return map[best];
+}
+
+// after the Prophet's quoted words end, collections append takhrij /
+// mutaba'at / footnotes — these sentence-initial markers close the matn
+const MATN_TAIL = new RegExp(
+  "(?:[.؟!؛»]|\\n)\\s*(و?تابعه|و?رواه|و?اخرجه|متفق عليه|قال ابو عيسي|" +
+  "وفي الباب عن|_حاشيه|\\d+\\s*[-–—]\\s*باب)", "g");
+
+/**
+ * Index in the RAW string where the matn (started at rawStart) ends, i.e.
+ * where trailing takhrij/commentary/footnotes begin. -1 = runs to the end.
+ */
+export function matnEnd(raw: string, rawStart: number): number {
+  if (rawStart < 0) return -1;
+  const { norm, map } = normWithMap(raw);
+  // locate rawStart in normalized space
+  let from = norm.length;
+  for (let i = 0; i < map.length; i++) {
+    if (map[i] >= rawStart) { from = i; break; }
+  }
+  MATN_TAIL.lastIndex = from;
+  let m: RegExpExecArray | null;
+  while ((m = MATN_TAIL.exec(norm)) !== null) {
+    const cut = m.index + 1; // keep the closing punctuation inside the matn
+    if (cut - from >= 25) return map[cut] ?? -1;
+  }
+  return -1;
 }
 
 // A hadith chain start: a transmission verb at a sentence boundary
 // (text start, after punctuation, or after a hadith number like "19 -").
+// NOT after a colon: "قال : حدثنا" continues the SAME chain (nested isnad).
 const CHAIN_VERB = "و?(?:حدثنا|حدثني|اخبرنا|اخبرني|انبانا|انباني)";
 const CHAIN_START = new RegExp(
-  `(?:^|[.:؟!؛»\\)\\]\\n]\\s*|\\d\\s*[-–—]\\s*)(${CHAIN_VERB})\\s`, "g");
+  `(?:^|[.؟!؛»\\)\\]\\n]\\s*|\\d\\s*[-–—]\\s*)(${CHAIN_VERB})\\s`, "g");
 
 /**
  * Start offsets (in the ORIGINAL string) of each hadith transmission chain.
@@ -120,7 +166,10 @@ export function displayText(raw: string, prefs: { tashkeel: boolean; matnOnly: b
   let out = raw;
   if (prefs.matnOnly) {
     const i = matnStart(raw);
-    if (i > 0) out = out.slice(i);
+    if (i > 0) {
+      const e = matnEnd(raw, i);
+      out = e > i ? out.slice(i, e) : out.slice(i);
+    }
   }
   if (!prefs.tashkeel) out = stripTashkeel(out);
   return out;

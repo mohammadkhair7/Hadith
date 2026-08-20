@@ -125,9 +125,7 @@ export default function Reader() {
             className="px-5 py-2 rounded-lg bg-islamic-teal text-white disabled:opacity-30">
             {t("prev")}
           </button>
-          <span className="text-sm text-gray-500 self-center">
-            {seq + 1} / {total.toLocaleString("en")}
-          </span>
+          <PageJump seq={seq} total={total} gotoSeq={gotoSeq} />
           <button onClick={() => gotoSeq(seq + 1)} disabled={seq + 1 >= total}
             className="px-5 py-2 rounded-lg bg-islamic-teal text-white disabled:opacity-30">
             {t("next")}
@@ -135,6 +133,36 @@ export default function Reader() {
         </div>
       </div>
     </div>
+  );
+}
+
+/** Direct page navigation: type a page number (1..total) and press Enter. */
+function PageJump({ seq, total, gotoSeq }: {
+  seq: number; total: number; gotoSeq: (s: number) => void;
+}) {
+  const [val, setVal] = useState(String(seq + 1));
+  useEffect(() => { setVal(String(seq + 1)); }, [seq]);
+
+  function commit() {
+    const n = parseInt(val, 10);
+    if (!isNaN(n) && total > 0) {
+      gotoSeq(Math.min(Math.max(n, 1), total) - 1);
+    } else {
+      setVal(String(seq + 1));
+    }
+  }
+
+  return (
+    <span className="flex items-center gap-1.5 text-sm text-gray-500 self-center" dir="ltr">
+      <input type="number" min={1} max={total} value={val}
+        onChange={(e) => setVal(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter") { commit(); (e.target as HTMLInputElement).blur(); } }}
+        onBlur={commit}
+        aria-label="page number"
+        className="w-20 border border-islamic-teal/30 rounded-lg px-2 py-1 text-center
+          focus:outline-none focus:ring-2 focus:ring-islamic-teal/50" />
+      <span>/ {total.toLocaleString("en")}</span>
+    </span>
   );
 }
 

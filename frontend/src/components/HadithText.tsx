@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { cleanText, mapRawOffset, matnStart, segmentHadiths, stripTashkeel } from "../text";
+import { cleanText, mapRawOffset, matnEnd, matnStart, segmentHadiths, stripTashkeel } from "../text";
 
 type Prefs = { tashkeel: boolean; matnOnly: boolean };
 
@@ -31,7 +31,7 @@ export default function HadithText({ raw, diac, sanadEndRaw, prefs }: {
     const b = usingDiac ? mapRawOffset(text, sanadEndRaw) : sanadEndRaw;
     return (
       <div className="arabic-text whitespace-pre-wrap">
-        <HadithBlock text={text} boundary={b} fmt={fmt}
+        <HadithBlock text={text} boundary={b} end={matnEnd(text, b)} fmt={fmt}
           focusKey="0" focus={focus} toggle={toggle} matnOnly={prefs.matnOnly} />
       </div>
     );
@@ -42,7 +42,7 @@ export default function HadithText({ raw, diac, sanadEndRaw, prefs }: {
     const b = matnStart(text);
     return (
       <div className="arabic-text whitespace-pre-wrap">
-        <HadithBlock text={text} boundary={b} fmt={fmt}
+        <HadithBlock text={text} boundary={b} end={matnEnd(text, b)} fmt={fmt}
           focusKey="0" focus={focus} toggle={toggle} matnOnly={prefs.matnOnly} />
       </div>
     );
@@ -60,7 +60,7 @@ export default function HadithText({ raw, diac, sanadEndRaw, prefs }: {
         return (
           <div key={i}
             className="border-s-2 border-islamic-gold/50 ps-3 rounded-sm">
-            <HadithBlock text={seg} boundary={b} fmt={fmt}
+            <HadithBlock text={seg} boundary={b} end={matnEnd(seg, b)} fmt={fmt}
               focusKey={String(i)} focus={focus} toggle={toggle}
               matnOnly={prefs.matnOnly} />
           </div>
@@ -70,9 +70,10 @@ export default function HadithText({ raw, diac, sanadEndRaw, prefs }: {
   );
 }
 
-function HadithBlock({ text, boundary, fmt, focusKey, focus, toggle, matnOnly }: {
+function HadithBlock({ text, boundary, end, fmt, focusKey, focus, toggle, matnOnly }: {
   text: string;
   boundary: number;
+  end: number;           // where the matn stops (takhrij/footnotes follow); -1 = text end
   fmt: (s: string) => string;
   focusKey: string;
   focus: string;
@@ -81,7 +82,8 @@ function HadithBlock({ text, boundary, fmt, focusKey, focus, toggle, matnOnly }:
 }) {
   const { t } = useTranslation();
   if (boundary <= 0) return <span>{fmt(text)}</span>;
-  if (matnOnly) return <span>{fmt(text.slice(boundary))}</span>;
+  const matnTo = end > boundary ? end : text.length;
+  if (matnOnly) return <span>{fmt(text.slice(boundary, matnTo))}</span>;
 
   const sKey = `${focusKey}:sanad`;
   const mKey = `${focusKey}:matn`;
@@ -108,8 +110,13 @@ function HadithBlock({ text, boundary, fmt, focusKey, focus, toggle, matnOnly }:
       <span className={`cursor-pointer transition-colors ${matnCls}`}
         title={t("click_highlight_matn")}
         onClick={() => toggle(mKey)}>
-        {fmt(text.slice(boundary))}
+        {fmt(text.slice(boundary, matnTo))}
       </span>
+      {matnTo < text.length && (
+        <span className={other ? "text-gray-400" : "text-gray-600"}>
+          {fmt(text.slice(matnTo))}
+        </span>
+      )}
     </>
   );
 }
