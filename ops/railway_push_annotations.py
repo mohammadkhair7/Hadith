@@ -35,6 +35,18 @@ with psycopg.connect(settings.database_url) as src, \
         ON CONFLICT (passage_id, layer, engine, version)
         DO UPDATE SET payload = EXCLUDED.payload, created_at = EXCLUDED.created_at
     """)
+    # mirror semantics: local is canonical — drop remote rows that no longer
+    # exist locally (e.g. superseded annotation versions)
+    stale = dst.execute("""
+        DELETE FROM passage_annotations pa
+        WHERE NOT EXISTS (
+            SELECT 1 FROM _pa_in i
+            WHERE i.passage_id = pa.passage_id AND i.layer = pa.layer
+              AND i.engine = pa.engine AND i.version = pa.version
+        )
+    """).rowcount
+    if stale:
+        print(f"removed {stale} stale remote rows")
     n_dst = dst.execute("SELECT count(*) FROM passage_annotations").fetchone()[0]
     dst.execute("ANALYZE passage_annotations")
     dst.commit()

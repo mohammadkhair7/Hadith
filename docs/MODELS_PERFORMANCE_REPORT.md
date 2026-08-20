@@ -12,7 +12,8 @@ the labeler": no manual annotation was used.
 | Model | Task | Architecture | Params | Test metric |
 |---|---|---|---|---|
 | A. Page indexing | word labeling: HNUM / ISNAD / MATN / HEADING | char-BiLSTM word encoder → 2-layer word BiLSTM | 2.84 M | **99.91 %** word accuracy; **99.79 %** matn boundary ±2 words (median error 0) |
-| B. Tashkeel | per-letter diacritic class (16 classes) | char embedding → 2-layer BiLSTM (768 hid) | 5.15 M | **4.17 % DER** (all letters), **4.02 % DER** (marked letters) |
+| B. Tashkeel v0.1 | per-letter diacritic class (16 classes) | char embedding → 2-layer BiLSTM (768 hid) | 5.15 M | **5.12 % DER** (all), **4.16 %** (marked) on the 70K corpus |
+| B. Tashkeel v0.2 (POS-aware) | same 16 classes, char emb ⊕ word POS-tag emb | BiLSTM over concatenated char+tag embeddings | 5.25 M | **4.46 % DER** (all), **3.51 %** (marked) — 13 % / 16 % relative error reduction vs v0.1 |
 | C. POS | word tagging, 24 tags distilled from CAMeL | same word-tagger architecture as A | 2.85 M | **95.87 %** token accuracy vs silver |
 
 ---
@@ -21,7 +22,8 @@ the labeler": no manual annotation was used.
 
 | Dataset | Source | Samples (train/dev/test) | Ground truth |
 |---|---|---|---|
-| `tashkeel.jsonl` | Shamela editions with vocalization density ≥ 0.6 (e.g. مجمع الزوائد 0.86, فتح الباري 0.80), windows ≤ 380 chars | 54,009 / 2,987 / 3,004 (514k test chars) | the vocalized text itself — stripping diacritics yields perfect parallel pairs |
+| `tashkeel.jsonl` | Shamela editions with vocalization density ≥ 0.6, windows ≤ 380 chars; regenerated 2026-08-20 at 70K windows with the vocalized Dar al-Sha'b Bukhari (edition 91) leading | 63,015 / 3,445 / 3,540 (605k test chars) | the vocalized text itself — stripping diacritics yields perfect parallel pairs |
+| `tashkeel_pos.jsonl` | the 70K windows above + a POS tag per word (`tashkeel tag-data`) | same split | silver tags from the neural POS model (C) on the bare text |
 | `pos.jsonl` | 4,000 random hadith units | 3,637 / 182 / 181 (19k test tokens) | CAMeL morphology engine (ensemble member, §12.8) silver tags |
 | `indexing.jsonl` | 40,000 units with the rule-extractor's raw sanad/matn boundary (`isnad_chains.sanad_end_raw`) + 8,000 TOC headings | 43,275 / 2,383 / 2,342 (181k test tokens, 1,903 boundaries) | rule pipeline §12.7 output over the 33-book extraction |
 
@@ -51,20 +53,25 @@ introducing «أنّ» stays in the sanad).
 - **Formulation** (per plan): character-level classification — for every Arabic
   letter, one of 16 classes (fatḥa/ḍamma/kasra/sukūn + 3 tanwīn forms + none,
   each ± shadda). Base letters are never altered.
-- **Training:** 3 epochs, ~2 min/epoch, batch 64, AdamW 2e-3.
-  Dev DER(all) 5.50 % → 4.36 %.
-- **Test:** DER **4.17 %** over all letters, **4.02 %** on letters that carry a
-  mark in the reference (514,153 test characters).
+- **v0.2 (POS-aware, 2026-08-20):** every character embedding is concatenated
+  with the POS-tag embedding of its word (silver tags from model C), so vowel
+  choice — case endings above all — is conditioned on the grammar. Both
+  versions retrained on the regenerated 70K-window corpus for a controlled
+  ablation (same splits, same epochs, same budget):
 
-```text
-> python -m arabiclib.neural.tashkeel infer --text "قال رسول الله صلى الله عليه وسلم انما الاعمال بالنيات وانما لكل امرئ ما نوى"
-قَالَ رَسُولُ اللَّهِ صَلَّى اللَّه عَلَيْهِ وَسلم انما الاعمال بالنيات وانما لكل امرئ مَا نوى
-```
+| | dev DER(all) | test DER(all) | test DER(marked) |
+|---|---|---|---|
+| v0.1 chars only | 5.02 % | 5.12 % | 4.16 % |
+| v0.2 chars + POS | **4.44 %** | **4.46 %** | **3.51 %** |
 
-Note the model reflects its training distribution: classical texts vocalize
-selectively, so the model is conservative on words the sources typically leave
-bare. Training on a fully-vocalized subset (density ≥ 0.9) sharpens coverage at
-the cost of corpus size.
+  POS conditioning removes ~13 % of remaining errors (16 % on marked letters)
+  at identical training cost — the tag embedding disambiguates unvocalized
+  homographs the char context alone cannot (noun ↔ verb readings).
+- **Training:** 3 epochs, ~2.2 min/epoch, batch 64, AdamW 2e-3 (both versions).
+- **Application (`annotate --edition N --pos`):** gap-only merge — words that
+  already carry any diacritic keep their original marks verbatim; Quran spans
+  (﴿...﴾ / {...}) are never altered; only fully-bare words receive model
+  output. One annotation version is kept per passage (older versions replaced).
 
 ## C. Neural POS (distilled from the Arabic-lib engine ensemble)
 
@@ -93,8 +100,11 @@ $env:PYTHONPATH = "<repo>\AdvancedHadith\Arabic-lib"
 
 # train / evaluate / run (GPU venv)
 Arabic-lib\.venv-gpu\Scripts\python -m arabiclib.neural.tashkeel train --epochs 3
-Arabic-lib\.venv-gpu\Scripts\python -m arabiclib.neural.tashkeel eval
-Arabic-lib\.venv-gpu\Scripts\python -m arabiclib.neural.tashkeel infer --text "..."   # or --file in.txt
+Arabic-lib\.venv-gpu\Scripts\python -m arabiclib.neural.tashkeel tag-data              # POS-tag windows
+Arabic-lib\.venv-gpu\Scripts\python -m arabiclib.neural.tashkeel train --pos --epochs 3
+Arabic-lib\.venv-gpu\Scripts\python -m arabiclib.neural.tashkeel eval [--pos]
+Arabic-lib\.venv-gpu\Scripts\python -m arabiclib.neural.tashkeel infer --text "..." [--pos]
+Arabic-lib\.venv-gpu\Scripts\python -m arabiclib.neural.tashkeel annotate --edition 109 --pos
 
 Arabic-lib\.venv-gpu\Scripts\python -m arabiclib.neural.pos      train --epochs 4
 Arabic-lib\.venv-gpu\Scripts\python -m arabiclib.neural.pos      infer --text "..."
