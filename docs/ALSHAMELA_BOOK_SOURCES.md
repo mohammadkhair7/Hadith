@@ -309,9 +309,10 @@ report is reviewed before the remaining 48 books are batch-processed.
     - crosswalk coverage (% of aljam3 units matched) and confidence
       distribution (high ≥ 0.6);
     - sample mismatches for manual inspection.
-    Books where crosswalk coverage or overlap confidence is low are flagged
-    (wrong edition, numbering scheme differences) and resolved before batch
-    continuation.
+    The report is **advisory, not a gate** (owner decision 2026-08-21):
+    low coverage/confidence from print or numbering-scheme differences is
+    recorded and the book still loads; it only means that book's crosswalk
+    should rely on `hadith_seq`/text matching rather than printed numbers.
 
 Environment note: `shamela_units`/`unit_map` are **rebuilt deterministically
 on each environment** (local, Railway) by re-running the script rather than
@@ -328,12 +329,28 @@ annotations push learned this the hard way), while (bkid, hadith_seq) and
 
 ## 7. Approval checklist
 
-- [x] §4.3 flags — all five decided (2026-08-21); work 61 to be removed
-- [ ] Part B §4.1 matn mappings approved (or edition swaps noted per row)
-- [ ] Part B §4.2 analysis-book mappings approved
-- [ ] Choice of alternates (مسند أحمد مخرجا vs ط الرسالة؛ ابن حبان مخرجا vs محققا)
-- [ ] Load order approved
-- [ ] Approval to run the pipeline locally, then on Railway
+- [x] §4.3 flags — all five decided (2026-08-21); work 61 removed
+- [x] Part B §4.1 matn mappings approved (owner go-ahead 2026-08-21; books manually verified equivalent)
+- [x] Part B §4.2 analysis-book mappings approved
+- [x] Choice of alternates (مسند أحمد مخرجا؛ صحيح ابن حبان bkid 60 as verified)
+- [x] Load order approved (pilot صحيح مسلم first, then the batch)
+- [x] Pipeline run locally and on Railway (2026-08-21)
+
+### Status (2026-08-21)
+
+| Stage | Local | Railway |
+|---|---|---|
+| Pages loaded (48 new books, ≈384k pages) | done | done |
+| Book index (TOC), root expanded | done (88 editions) | done (88 editions) |
+| Unitize + crosswalk (`shamela_units`/`unit_map`) | done — 88 editions, ~640k units | done — reports identical to local (deterministic) |
+| Embeddings (semantic search) | running (batch, 0 errors) | pending — run from Admin → Embeddings on production |
+| Structure spans (sanad/matn) | running (full-corpus GPU batch) | pushed after local batch (natural-key push) |
+| Tashkeel — closing step | queued after structure (GPU watcher) | pushed with the same annotations push |
+
+Five books flagged low crosswalk *confidence* (coverage still 93–99%):
+المنتقى لابن الجارود، المستدرك، السنن الكبرى للبيهقي، مسند أحمد، مصنف ابن
+أبي شيبة — printed-numbering scheme differences between prints, recorded per
+the advisory policy; their crosswalks rely on text matching.
 
 ## 8. Feasibility study (future option): retiring aljam3 and relying on Shamela only
 
