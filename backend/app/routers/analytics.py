@@ -178,6 +178,97 @@ def _verbs(edition_id: int | None):
     return rows
 
 
+@router.get("/timeline")
+def timeline():
+    """Hadith origination timeline (docs/HADITH_TIMELINE_ANALYSIS.md):
+    year distribution, dated events, seasonal anchors, companion windows."""
+    return _cached("timeline", _timeline)
+
+
+def _timeline():
+    with db() as conn:
+        coverage = q1(conn, """
+            SELECT
+              (SELECT count(*) FROM passages WHERE kind='unit')      AS units,
+              count(*)                                               AS dated,
+              count(*) FILTER (WHERE year_best IS NOT NULL)          AS exact_year,
+              count(*) FILTER (WHERE basis='companion')              AS windowed,
+              count(*) FILTER (WHERE basis='season')                 AS season_only,
+              count(*) FILTER (WHERE season IS NOT NULL)             AS seasonal
+            FROM hadith_dates
+        """)
+        years = q(conn, """
+            SELECT year_best AS year, count(*) AS n
+            FROM hadith_dates WHERE year_best IS NOT NULL
+            GROUP BY 1 ORDER BY 1
+        """)
+        events = q(conn, """
+            SELECT e.event_key, e.title_ar, e.year_ah, e.era, count(d.passage_id) AS n
+            FROM timeline_events e
+            LEFT JOIN hadith_dates d ON d.event_key = e.event_key
+            GROUP BY 1, 2, 3, 4
+            HAVING count(d.passage_id) > 0
+            ORDER BY e.year_ah, n DESC
+        """)
+        seasons = q(conn, """
+            SELECT season, count(*) AS n FROM hadith_dates
+            WHERE season IS NOT NULL GROUP BY 1 ORDER BY n DESC
+        """)
+        companions = q(conn, """
+            SELECT companion_key, companion_ar,
+                   min(year_min) AS win_from, max(year_max) AS win_to,
+                   count(*) AS n
+            FROM hadith_dates
+            WHERE companion_key IS NOT NULL
+            GROUP BY 1, 2 ORDER BY n DESC LIMIT 40
+        """)
+    return {"coverage": coverage, "years": years, "events": events,
+            "seasons": seasons, "companions": companions}
+
+
+@router.get("/timeline/hadiths")
+def timeline_hadiths(event: str | None = None, year: int | None = None,
+                     season: str | None = None, companion: str | None = None,
+                     limit: int = 20, offset: int = 0):
+    """Drill-down listing for one timeline bucket."""
+    where, args = [], []
+    if event:
+        where.append("d.event_key = %s")
+        args.append(event)
+    if year is not None:
+        where.append("d.year_best = %s")
+        args.append(year)
+    if season:
+        where.append("d.season = %s")
+        args.append(season)
+    if companion:
+        where.append("d.companion_key = %s")
+        args.append(companion)
+    if not where:
+        raise HTTPException(400, "one of event/year/season/companion is required")
+    cond = " AND ".join(where)
+    with db() as conn:
+        total = q1(conn, f"SELECT count(*) AS n FROM hadith_dates d WHERE {cond}",
+                   tuple(args))["n"]
+        rows = q(conn, f"""
+            SELECT p.passage_id, p.hadith_num, left(p.text_raw, 220) AS preview,
+                   w.title_ar AS work_title,
+                   d.basis, d.year_min, d.year_max, d.year_best, d.season,
+                   d.companion_ar, d.confidence,
+                   e.title_ar AS event_ar, ht.type_ar AS hadith_type_ar
+            FROM hadith_dates d
+            JOIN passages p USING (passage_id)
+            JOIN editions ed ON ed.edition_id = p.edition_id
+            JOIN works w ON w.work_id = ed.work_id
+            LEFT JOIN timeline_events e ON e.event_key = d.event_key
+            LEFT JOIN hadith_types ht ON ht.passage_id = d.passage_id
+            WHERE {cond}
+            ORDER BY d.confidence DESC, p.passage_id
+            LIMIT %s OFFSET %s
+        """, tuple(args) + (min(limit, 50), max(offset, 0)))
+    return {"total": total, "items": rows}
+
+
 @router.get("/passages/{passage_id}/mutabaat")
 def mutabaat(passage_id: int, limit: int = 12):
     """Corroborating transmissions: other hadiths whose chains share

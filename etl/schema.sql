@@ -1,5 +1,5 @@
 -- ============================================================================
--- AdvancedHadith unified schema (ARCH ÃÂÃÂ§6.2) ÃÂ¢ÃÂÃÂ Postgres 16 + Apache AGE
+-- AdvancedHadith unified schema (ARCH ÃÂÃÂÃÂÃÂ§6.2) ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ Postgres 16 + Apache AGE
 -- Idempotent: safe to re-run (IF NOT EXISTS everywhere).
 -- ============================================================================
 
@@ -10,7 +10,7 @@ CREATE EXTENSION IF NOT EXISTS unaccent;
 
 -- ----------------------------------------------------------------------------
 -- works & editions
--- A "work" is the abstract book (e.g. ÃÂÃÂµÃÂÃÂ­ÃÂÃÂÃÂÃÂ­ ÃÂÃÂ§ÃÂÃÂÃÂÃÂ¨ÃÂÃÂ®ÃÂÃÂ§ÃÂÃÂ±ÃÂÃÂ); an "edition" is one
+-- A "work" is the abstract book (e.g. ÃÂÃÂÃÂÃÂµÃÂÃÂÃÂÃÂ­ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ­ ÃÂÃÂÃÂÃÂ§ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¨ÃÂÃÂÃÂÃÂ®ÃÂÃÂÃÂÃÂ§ÃÂÃÂÃÂÃÂ±ÃÂÃÂÃÂÃÂ); an "edition" is one
 -- source's copy of it (sunna crawl, Shamela CSV, alifta archive page set).
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS works (
@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS toc_nodes (
 CREATE INDEX IF NOT EXISTS toc_edition_parent ON toc_nodes (edition_id, parent_id, ord);
 
 -- ----------------------------------------------------------------------------
--- passages: the single text-unit table for all three sources (ÃÂÃÂ§6.1 principle 1)
+-- passages: the single text-unit table for all three sources (ÃÂÃÂÃÂÃÂ§6.1 principle 1)
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS passages (
     passage_id     bigserial PRIMARY KEY,
@@ -66,8 +66,8 @@ CREATE TABLE IF NOT EXISTS passages (
     seq            int NOT NULL,              -- reading order within the edition
     kind           text NOT NULL DEFAULT 'page',  -- unit | page
     hadith_num     text,
-    part           text,                      -- ÃÂÃÂ¬ÃÂÃÂ²ÃÂÃÂ¡
-    page           text,                      -- ÃÂÃÂµÃÂÃÂÃÂÃÂ­ÃÂÃÂ© (printed)
+    part           text,                      -- ÃÂÃÂÃÂÃÂ¬ÃÂÃÂÃÂÃÂ²ÃÂÃÂÃÂÃÂ¡
+    page           text,                      -- ÃÂÃÂÃÂÃÂµÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ­ÃÂÃÂÃÂÃÂ© (printed)
     toc_node_id    bigint,                    -- nearest TOC anchor when known
     text_raw       text NOT NULL DEFAULT '',  -- original (tashkeel preserved)
     text_norm      text NOT NULL DEFAULT '',  -- project-standard normalization
@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS subject_links (
 CREATE INDEX IF NOT EXISTS subject_links_passage ON subject_links (passage_id);
 
 -- ----------------------------------------------------------------------------
--- narrators (ÃÂÃÂ±ÃÂÃÂ¬ÃÂÃÂ§ÃÂÃÂ ÃÂÃÂ§ÃÂÃÂÃÂÃÂ­ÃÂÃÂ¯ÃÂÃÂÃÂÃÂ«) ÃÂ¢ÃÂÃÂ populated in Phase 6
+-- narrators (ÃÂÃÂÃÂÃÂ±ÃÂÃÂÃÂÃÂ¬ÃÂÃÂÃÂÃÂ§ÃÂÃÂÃÂÃÂ ÃÂÃÂÃÂÃÂ§ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ­ÃÂÃÂÃÂÃÂ¯ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ«) ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ populated in Phase 6
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS narrators (
     narrator_id   serial PRIMARY KEY,
@@ -137,8 +137,8 @@ CREATE INDEX IF NOT EXISTS aliases_norm ON narrator_aliases (alias_norm);
 CREATE TABLE IF NOT EXISTS narrator_assessments (
     assessment_id bigserial PRIMARY KEY,
     narrator_id   int NOT NULL REFERENCES narrators,
-    critic        text,                       -- e.g. ÃÂÃÂ§ÃÂÃÂ¨ÃÂÃÂ ÃÂÃÂ­ÃÂÃÂ¨ÃÂÃÂ§ÃÂÃÂ
-    grade         text,                       -- e.g. ÃÂÃÂ«ÃÂÃÂÃÂÃÂ©
+    critic        text,                       -- e.g. ÃÂÃÂÃÂÃÂ§ÃÂÃÂÃÂÃÂ¨ÃÂÃÂÃÂÃÂ ÃÂÃÂÃÂÃÂ­ÃÂÃÂÃÂÃÂ¨ÃÂÃÂÃÂÃÂ§ÃÂÃÂÃÂÃÂ
+    grade         text,                       -- e.g. ÃÂÃÂÃÂÃÂ«ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ©
     quote         text,
     src_passage   bigint REFERENCES passages,
     meta          jsonb DEFAULT '{}'::jsonb
@@ -161,7 +161,7 @@ CREATE TABLE IF NOT EXISTS isnad_links (
     pos          int NOT NULL,                -- 0 = collector side
     mention_ar   text NOT NULL,
     mention_norm text NOT NULL,
-    verb         text,                        -- ÃÂÃÂ­ÃÂÃÂ¯ÃÂÃÂ«ÃÂÃÂÃÂÃÂ§ | ÃÂÃÂ£ÃÂÃÂ®ÃÂÃÂ¨ÃÂÃÂ±ÃÂÃÂÃÂÃÂ§ | ÃÂÃÂ¹ÃÂÃÂ ...
+    verb         text,                        -- ÃÂÃÂÃÂÃÂ­ÃÂÃÂÃÂÃÂ¯ÃÂÃÂÃÂÃÂ«ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ§ | ÃÂÃÂÃÂÃÂ£ÃÂÃÂÃÂÃÂ®ÃÂÃÂÃÂÃÂ¨ÃÂÃÂÃÂÃÂ±ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ§ | ÃÂÃÂÃÂÃÂ¹ÃÂÃÂÃÂÃÂ ...
     narrator_id  int REFERENCES narrators,    -- resolved entity (nullable until resolution)
     confidence   real DEFAULT 0,
     PRIMARY KEY (chain_id, pos)
@@ -170,7 +170,7 @@ CREATE INDEX IF NOT EXISTS isnad_links_narrator ON isnad_links (narrator_id);
 CREATE INDEX IF NOT EXISTS isnad_links_mention ON isnad_links (mention_norm);
 
 -- ----------------------------------------------------------------------------
--- translations (ÃÂÃÂ§11) ÃÂ¢ÃÂÃÂ object/field/language grid with review workflow
+-- translations (ÃÂÃÂÃÂÃÂ§11) ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ object/field/language grid with review workflow
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS translations (
     obj_type   text NOT NULL,                 -- passage | work | toc | subject | narrator
@@ -272,7 +272,7 @@ CREATE TABLE IF NOT EXISTS etl_state (
     updated_at timestamptz DEFAULT now()
 );
 
--- hadith grades (ÃÂÃÂÃÂ­ÃÂ / ÃÂÃÂÃÂ¤ / ÃÂÃÂÃÂ­ÃÂ ...) from book convention, Kalimat, or scholars
+-- hadith grades (ÃÂÃÂÃÂÃÂÃÂÃÂ­ÃÂÃÂ / ÃÂÃÂÃÂÃÂÃÂÃÂ¤ / ÃÂÃÂÃÂÃÂÃÂÃÂ­ÃÂÃÂ ...) from book convention, Kalimat, or scholars
 CREATE TABLE IF NOT EXISTS hadith_grades (
     passage_id  bigint PRIMARY KEY REFERENCES passages ON DELETE CASCADE,
     grade_ar    text,
@@ -285,8 +285,8 @@ CREATE INDEX IF NOT EXISTS grades_norm ON hadith_grades (grade_norm);
 -- sanad/matn boundary as a raw-text offset (matn highlighting)
 ALTER TABLE isnad_chains ADD COLUMN IF NOT EXISTS sanad_end_raw int;
 
--- hadith type classification (ÙÙØ¹ Ø§ÙØ­Ø¯ÙØ«): qudsi / marfu (qawli|fili) /
--- mawquf / maqtu â rule classifier over the matn opening + narrator generation
+-- hadith type classification (ÃÂÃÂÃÂ¹ ÃÂ§ÃÂÃÂ­ÃÂ¯ÃÂÃÂ«): qudsi / marfu (qawli|fili) /
+-- mawquf / maqtu Ã¢ÂÂ rule classifier over the matn opening + narrator generation
 CREATE TABLE IF NOT EXISTS hadith_types (
     passage_id  bigint PRIMARY KEY REFERENCES passages ON DELETE CASCADE,
     type_norm   text NOT NULL,             -- qudsi|marfu_qawli|marfu_fili|marfu|mawquf|maqtu
@@ -296,3 +296,29 @@ CREATE TABLE IF NOT EXISTS hadith_types (
     updated_at  timestamptz DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS hadith_types_norm ON hadith_types (type_norm);
+
+-- hadith origination timeline (ops/analyze_timeline.py; docs/HADITH_TIMELINE_ANALYSIS.md)
+-- year axis is hijri; negative years = before the hijra (بعثة = -13)
+CREATE TABLE IF NOT EXISTS timeline_events (
+    event_key text PRIMARY KEY,
+    title_ar  text NOT NULL,
+    year_ah   smallint NOT NULL,
+    era       text NOT NULL                -- meccan|prophetic|rashidun|umayyad
+);
+CREATE TABLE IF NOT EXISTS hadith_dates (
+    passage_id    bigint PRIMARY KEY REFERENCES passages ON DELETE CASCADE,
+    year_min      smallint,                -- origination window (inclusive)
+    year_max      smallint,
+    year_best     smallint,                -- specific year when a dated event matched
+    basis         text NOT NULL,           -- event|companion|event+companion|season
+    event_key     text REFERENCES timeline_events,
+    season        text,                    -- ramadan|hajj|eid
+    companion_key text,
+    companion_ar  text,
+    confidence    real NOT NULL,
+    method        text NOT NULL DEFAULT 'rule-0.1'
+);
+CREATE INDEX IF NOT EXISTS hadith_dates_year ON hadith_dates (year_best);
+CREATE INDEX IF NOT EXISTS hadith_dates_event ON hadith_dates (event_key);
+CREATE INDEX IF NOT EXISTS hadith_dates_season ON hadith_dates (season);
+CREATE INDEX IF NOT EXISTS hadith_dates_companion ON hadith_dates (companion_key);
