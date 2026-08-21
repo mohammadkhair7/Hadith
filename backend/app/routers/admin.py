@@ -182,6 +182,12 @@ class EmbJobBody(BaseModel):
     mode: str = "skip"          # skip | overwrite
 
 
+# gemini-embedding-001 paid tier, standard (non-batch) API, USD per 1M input
+# tokens (https://ai.google.dev/gemini-api/docs/pricing, checked 2026-08-21).
+# Output dimensionality (768-d here) does not affect the price.
+EMBED_USD_PER_MTOK = 0.15
+
+
 @router.get("/embeddings/coverage")
 def embeddings_coverage(user: dict = Depends(admin_user)):
     from ..services.embed_jobs import coverage, list_jobs
@@ -190,7 +196,9 @@ def embeddings_coverage(user: dict = Depends(admin_user)):
     # rough cost estimate: Arabic ≈ 2.5 chars/token
     for r in rows:
         r["est_tokens_total"] = int((r["total_chars"] or 0) / 2.5)
-    return {"editions": rows, "jobs": list_jobs()}
+        r["est_cost_usd"] = round(r["est_tokens_total"] / 1e6 * EMBED_USD_PER_MTOK, 4)
+    return {"editions": rows, "jobs": list_jobs(),
+            "price_usd_per_mtok": EMBED_USD_PER_MTOK}
 
 
 @router.post("/embeddings/jobs")

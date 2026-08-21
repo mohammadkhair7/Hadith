@@ -14,6 +14,7 @@ type Row = {
   chunks_failed: number;
   passages_embedded: number;
   est_tokens_total: number;
+  est_cost_usd: number;
   last_run: string | null;
 };
 
@@ -102,7 +103,8 @@ export default function AdminEmbeddings() {
           Run embedding job
         </button>
         <span className="text-xs text-gray-400" dir="ltr">
-          est. cost shown per book — embedding is never automatic
+          embedding is <b>per page</b> (each page split into ≤1,500-char chunks), not per word —
+          cost estimated at gemini-embedding-001 (768-d) rates, $0.15 / 1M input tokens; never automatic
         </span>
       </div>
 
@@ -139,10 +141,13 @@ export default function AdminEmbeddings() {
               <th className="p-2 text-left">book</th>
               <th className="p-2">source</th>
               <th className="p-2">kind</th>
-              <th className="p-2 text-right">passages</th>
+              <th className="p-2 text-right"
+                title="rows embedded per book: printed pages for Shamela books, hadith units for aljam3 books">
+                pages</th>
               <th className="p-2 text-right">embedded</th>
               <th className="p-2 text-right">coverage</th>
               <th className="p-2 text-right">est. tokens</th>
+              <th className="p-2 text-right">est. cost</th>
               <th className="p-2">last run</th>
             </tr>
           </thead>
@@ -175,6 +180,10 @@ export default function AdminEmbeddings() {
                   </td>
                   <td className="p-2 text-right text-xs text-gray-500">
                     {r.est_tokens_total.toLocaleString("en")}
+                  </td>
+                  <td className="p-2 text-right text-xs text-gray-500"
+                    title="gemini-embedding-001 (768-d), $0.15 / 1M input tokens">
+                    ${(r.est_cost_usd ?? 0).toFixed(2)}
                   </td>
                   <td className="p-2 text-xs text-gray-400">
                     {r.last_run ? new Date(r.last_run).toLocaleString("en-GB") : "—"}
