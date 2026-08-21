@@ -32,7 +32,7 @@ mark {
   @apply bg-islamic-gold/40 text-inherit rounded px-0.5;
 }
 
-/* legacy alifta HTML content */
+/* legacy hadith_struct archive HTML content */
 .legacy-content table {
   border-collapse: collapse;
   margin: 0 auto;

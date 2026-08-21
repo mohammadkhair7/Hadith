@@ -8,8 +8,8 @@ import psycopg
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[1]
-load_dotenv(ROOT / ".env.local")
-load_dotenv(ROOT.parent / ".env")  # shared Hadith.chat env (API keys etc.)
+load_dotenv(ROOT / ".env.local", encoding="utf-8-sig")
+load_dotenv(ROOT.parent / ".env", encoding="utf-8-sig")  # shared Hadith.chat env (API keys etc.)
 
 
 def pg_url() -> str:
@@ -30,6 +30,8 @@ def connect(autocommit: bool = False) -> psycopg.Connection:
 
 SOURCES = {
     "hadith": ROOT.parent / "data" / "hadith.db",
-    "alifta": ROOT.parent / "Alifta.chat" / "data" / "alifta.db",
+    # structural-metadata reference archive (retired from the app 2026-08-20);
+    # copied into this repo so nothing depends on the old sibling folder
+    "hadith_struct": ROOT / "data" / "hadith_struct.db",
     "alshamela": ROOT.parent / "Al-Shamela" / "alshamela.db",
 }

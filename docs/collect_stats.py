@@ -21,8 +21,8 @@ for t in ("subjects", "subject_hits"):
         print(f"  {t}: n/a ({e})")
 print("  tables:", [r[0] for r in h.execute("SELECT name FROM sqlite_master WHERE type='table'")])
 
-print("\n== alifta.db ==")
-a = sqlite3.connect(ROOT / "Alifta.chat" / "data" / "alifta.db")
+print("\n== hadith_struct.db ==")
+a = sqlite3.connect(ROOT / "AdvancedHadith" / "data" / "hadith_struct.db")
 print("  tables:", [r[0] for r in a.execute("SELECT name FROM sqlite_master WHERE type='table'")])
 print("  pages:", a.execute("SELECT COUNT(*) FROM pages").fetchone()[0])
 print("  total html chars:", a.execute("SELECT SUM(LENGTH(content_html)) FROM pages").fetchone()[0])
@@ -35,6 +35,7 @@ print("  total text chars:", s.execute("SELECT SUM(LENGTH(nass)) FROM pages").fe
 print("  gap_candidates:", s.execute("SELECT COUNT(*) FROM gap_candidates").fetchone()[0])
 
 print("\n== file sizes ==")
-for p in (ROOT / "data" / "hadith.db", ROOT / "Alifta.chat" / "data" / "alifta.db",
+for p in (ROOT / "data" / "hadith.db",
+          ROOT / "AdvancedHadith" / "data" / "hadith_struct.db",
           ROOT / "Al-Shamela" / "alshamela.db"):
     print(f"  {p.name}: {p.stat().st_size/1e6:.0f} MB")

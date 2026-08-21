@@ -1,6 +1,7 @@
 """Remove the alifta page-archive pseudo-book (edition 131) from the app:
 it is a notes/reference archive, not a book (user request 2026-08-20). The raw
-html files remain on disk under Alifta.chat/data/raw as reference material.
+html files remain on disk under AdvancedHadith/data/raw/hadith_struct as
+reference material (source identifier since renamed alifta -> hadith_struct).
 Deletes passages -> edition -> orphaned work. DATABASE_URL-driven (local+Railway)."""
 import os
 import sys

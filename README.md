@@ -1,7 +1,7 @@
 # AdvancedHadith
 
 Unified Hadith knowledge platform merging three corpora — **hadith.db**
-(الجامع hadith collection), **alifta.db** (fatwa-portal reference archive) and
+(الجامع hadith collection), **hadith_struct.db** (structural-metadata reference archive) and
 **alshamela.db** (Al-Maktaba Al-Shamela) — into one PostgreSQL + Apache AGE
 knowledge base with:
 

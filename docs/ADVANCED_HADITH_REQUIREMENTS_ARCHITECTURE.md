@@ -4,7 +4,7 @@
 No code has been written yet.**
 
 Version 1.6 — 2026-08-19 (v1.1: AGE approved; KG subset visualization; manual embedding
-management; translations/i18n; narrator transliteration; alifta stats downgraded to
+management; translations/i18n; narrator transliteration; hadith_struct stats downgraded to
 reference-design-only. v1.2: Arabic language analysis layer `Arabic-lib` added — Farasa +
 CAMeL grammar tools feeding NL2CYPHER linguistic frames and KG generation, §12.
 v1.3: AlKhalil2 root-allocation engine integrated, §12.6; automated book indexing
@@ -25,7 +25,7 @@ Decision log: `docs/DECISIONS.md`
 ## 1. Executive summary
 
 AdvancedHadith merges the three corpora built so far — **hadith.db** (الجامع hadith
-collection crawl), **alifta.db** (fatwa-portal reference archive) and **alshamela.db**
+collection crawl), **hadith_struct.db** (structural-metadata reference archive) and **alshamela.db**
 (Al-Maktaba Al-Shamela CSV + PDF) — into one unified **PostgreSQL** knowledge base with:
 
 - **Syntactic search** — full-text keyword search that works **with and without tashkeel**,
@@ -120,17 +120,17 @@ everything else** (relational + full-text + graph via Apache AGE + translations)
 | Source | Content | Size |
 |---|---|---|
 | `data/hadith.db` | 90 books (33 matn + 57 service), **382,583** hadith/page units (~182M chars), 622,658 TOC rows, 21,994 subjects, 1,138,369 subject↔hadith links, FTS5 index | 1.71 GB |
-| `Alifta.chat/data/alifta.db` | 40 archived pages (~1.2M chars) incl. narrator statistics tables and 12 deep hadith snapshots; same BookID/MainID space as hadith.db (verified) | 2 MB |
+| `AdvancedHadith/data/hadith_struct.db` (formerly alifta.db) | 40 archived pages (~1.2M chars) incl. narrator statistics tables and 12 deep hadith snapshots; same BookID/MainID space as hadith.db (verified) | 2 MB |
 | `Al-Shamela/alshamela.db` | 40 books, **276,635** printed pages (~319M chars), `books` maps hadith book id ↔ Shamela bkid, 4 gap candidates | 1.15 GB |
 
 Cross-source keys already established:
 - `Al-Shamela/book_map.py`: hadith book id ↔ (archive, bkid) — verified 100% text overlap on all 7 testable books.
-- alifta archive ↔ sunna: identical `(BookID, MainID)` space (comparison report §2, `Alifta.chat/docs/HADITH_ALIFTA_COMPARISON_ARCH.md`).
+- hadith_struct archive ↔ sunna: identical `(BookID, MainID)` space (comparison report §2, `docs/HADITH_ALIFTA_COMPARISON_ARCH.md`).
 
 Especially valuable for the knowledge graph:
 - **Rijāl biographies**: الثقات (17k pages), الجرح والتعديل, الإصابة في تمييز الصحابة, تاريخ بغداد, تاريخ الإسلام, تحفة التحصيل.
 - **Atrāf indexes**: تحفة الأشراف (28,767 pages) and إتحاف المهرة (31,913 pages) — printed indexes of isnads per hadith, ideal for takhrij and for validating extracted chains.
-- **alifta.db statistics pages** (viewrwahstatistics, viewasanidstatistics, viewrwahtabaqat…):
+- **hadith_struct.db statistics pages** (viewrwahstatistics, viewasanidstatistics, viewrwahtabaqat…):
   used **as a reference design only** — they demonstrate proven information layouts and a
   navigation workflow for narrator statistics (counts by collection, tabaqat tables,
   narrator detail drill-down), but their **numbers are not trusted** as ground truth since
@@ -178,7 +178,7 @@ graph TB
     GM[Gemini API<br/>gemini-2.5-flash + gemini-embedding-001]
     BE --> GM
     subgraph Local["Local machine (E:\\...\\AdvancedHadith)"]
-        ETL[ETL pipeline<br/>hadith.db / alifta.db / alshamela.db]
+        ETL[ETL pipeline<br/>hadith.db / hadith_struct.db / alshamela.db]
         AL[Arabic-lib CLI<br/>grammar annotation + neural indexer<br/>+ tashkeel — RTX 3080 GPU]
     end
     ETL -->|one-time + incremental loads| PG
@@ -208,7 +208,7 @@ graph TB
 ### 6.1 Design principles
 
 1. **One text-unit table** (`passages`) for all sources — a hadith page from sunna, a
-   printed page from Shamela, and an archive page from alifta are all passages with a
+   printed page from Shamela, and an archive page from hadith_struct are all passages with a
    `source` discriminator and source-native identifiers preserved.
 2. **Dual text columns**: `text_raw` (with tashkeel, for display + exact mode) and
    `text_norm` (our normalization, for search).
@@ -223,7 +223,7 @@ graph TB
 
 ```sql
 -- provenance
-CREATE TYPE source_t AS ENUM ('sunna', 'alifta', 'shamela', 'pdf');
+CREATE TYPE source_t AS ENUM ('sunna', 'hadith_struct', 'shamela', 'pdf');
 
 CREATE TABLE works (              -- logical work (the "book" as a concept)
     work_id      serial PRIMARY KEY,
@@ -254,7 +254,7 @@ CREATE TABLE passages (           -- the universal text unit
     hadith_num   text,                   -- explicit hadith number where known
     text_raw     text NOT NULL,
     text_norm    text NOT NULL,
-    html         text,                   -- original HTML when available (sunna/alifta)
+    html         text,                   -- original HTML when available (sunna/hadith_struct)
     tsv          tsvector,               -- GENERATED from text_norm (see 6.3)
     UNIQUE (edition_id, source_ref)
 );
@@ -576,8 +576,8 @@ Two additional classification dimensions, both queryable in keyword/exact search
    Corpus distribution (257,094 chains → 192,458 classified, 75%):
    qudsi 1,712 · marfu_qawli 89,130 · marfu_fili 34,340 · marfu 60,144 ·
    mawquf 695 · maqtu 6,437. «قال الله : ﴿…﴾» is guarded as Quran citation,
-   not قدسي. Taxonomy follows the alifta archive's نوع الحديث tree
-   (`Alifta.chat/data/raw/viewsubjecttree.html`, `definitions.html`).
+   not قدسي. Taxonomy follows the hadith_struct archive's نوع الحديث tree
+   (`AdvancedHadith/data/raw/hadith_struct/viewsubjecttree.html`, `definitions.html`).
 
 Chapter/topic categorization (the third dimension) was already served by the
 `subjects`/`subject_links` load from hadith.db (21,994 subjects, 1.14M links):

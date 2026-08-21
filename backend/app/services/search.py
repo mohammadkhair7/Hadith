@@ -35,8 +35,8 @@ def keyword_search(
         where.append("p.source = %(source)s")
         params["source"] = source
     else:
-        # the alifta archive is reference material, not part of "all sources"
-        where.append("p.source <> 'alifta'")
+        # the hadith_struct archive is reference material, not part of "all sources"
+        where.append("p.source <> 'hadith_struct'")
     if edition_id:
         where.append("p.edition_id = %(edition_id)s")
         params["edition_id"] = edition_id

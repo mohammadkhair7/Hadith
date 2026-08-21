@@ -1,9 +1,9 @@
 # Semantic view of the AdvancedHadith unified schema (§8.2) — fed into the
 # NL2SQL prompt. Keep in sync with etl/schema.sql.
 description: >
-  قاعدة بيانات موحدة لثلاث مكتبات حديثية: موسوعة السنة (sunna)، أرشيف الإفتاء
-  (alifta)، والمكتبة الشاملة (shamela). النص الكامل في passages؛ كل شيء آخر
-  وصف وتنظيم.
+  قاعدة بيانات موحدة لثلاث مكتبات حديثية: موسوعة السنة (sunna)، أرشيف البنية
+  المرجعي (hadith_struct)، والمكتبة الشاملة (shamela). النص الكامل في passages؛
+  كل شيء آخر وصف وتنظيم.
 tables:
   works:
     description: الكتاب المجرد (العمل) — قد يكون له عدة طبعات/مصادر
@@ -17,7 +17,7 @@ tables:
     columns:
       edition_id: معرف
       work_id: يشير إلى works
-      source: "sunna | alifta | shamela"
+      source: "sunna | hadith_struct | shamela"
       title_ar: عنوان الطبعة
       book_type: "matn | service | page-archive"
       passage_count: عدد النصوص
@@ -26,7 +26,7 @@ tables:
     columns:
       passage_id: معرف
       edition_id: يشير إلى editions
-      source: "sunna | alifta | shamela (منسوخ للتصفية)"
+      source: "sunna | hadith_struct | shamela (منسوخ للتصفية)"
       seq: ترتيب القراءة داخل الطبعة
       kind: "unit (حديث مفرد) | page (صفحة)"
       hadith_num: رقم الحديث (نص، قد يحوي نطاقات)

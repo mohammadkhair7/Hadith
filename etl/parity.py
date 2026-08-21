@@ -25,7 +25,7 @@ def main() -> None:
             ("shamela passages", sq2.execute("SELECT COUNT(*) FROM pages").fetchone()[0],
              pg.execute("SELECT COUNT(*) FROM passages WHERE source='shamela'").fetchone()[0]),
         ]
-        # alifta archive retired 2026-08-20 (notes, not a book) — no parity check
+        # hadith_struct archive retired 2026-08-20 (notes, not a book) — no parity check
         links = pg.execute("SELECT COUNT(*) FROM subject_links").fetchone()[0]
         src_links = sq.execute("SELECT COUNT(DISTINCT subject_id || ':' || book_id || ':' || main_id) FROM subject_hits").fetchone()[0]
 

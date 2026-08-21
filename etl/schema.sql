@@ -11,7 +11,7 @@ CREATE EXTENSION IF NOT EXISTS unaccent;
 -- ----------------------------------------------------------------------------
 -- works & editions
 -- A "work" is the abstract book (e.g. ÃÂÃÂÃÂÃÂµÃÂÃÂÃÂÃÂ­ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ­ ÃÂÃÂÃÂÃÂ§ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¨ÃÂÃÂÃÂÃÂ®ÃÂÃÂÃÂÃÂ§ÃÂÃÂÃÂÃÂ±ÃÂÃÂÃÂÃÂ); an "edition" is one
--- source's copy of it (sunna crawl, Shamela CSV, alifta archive page set).
+-- source's copy of it (sunna crawl, Shamela CSV, hadith_struct archive page set).
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS works (
     work_id      serial PRIMARY KEY,
@@ -27,7 +27,7 @@ CREATE INDEX IF NOT EXISTS works_title_trgm ON works USING gin (title_norm gin_t
 CREATE TABLE IF NOT EXISTS editions (
     edition_id     serial PRIMARY KEY,
     work_id        int NOT NULL REFERENCES works,
-    source         text NOT NULL,             -- sunna | alifta | shamela
+    source         text NOT NULL,             -- sunna | hadith_struct | shamela
     source_book_id int,                       -- hadith.db books.id / shamela bkid / null
     title_ar       text NOT NULL,
     section_name   text,
@@ -61,8 +61,8 @@ CREATE INDEX IF NOT EXISTS toc_edition_parent ON toc_nodes (edition_id, parent_i
 CREATE TABLE IF NOT EXISTS passages (
     passage_id     bigserial PRIMARY KEY,
     edition_id     int NOT NULL REFERENCES editions,
-    source         text NOT NULL,             -- sunna | alifta | shamela (denormalized for filters)
-    source_page_id bigint NOT NULL,           -- matn.main_id / pages.page_id / alifta ord
+    source         text NOT NULL,             -- sunna | hadith_struct | shamela (denormalized for filters)
+    source_page_id bigint NOT NULL,           -- matn.main_id / pages.page_id / hadith_struct ord
     seq            int NOT NULL,              -- reading order within the edition
     kind           text NOT NULL DEFAULT 'page',  -- unit | page
     hadith_num     text,
