@@ -4,8 +4,10 @@ import time
 import migrate
 import load_sunna
 import load_shamela
-import load_alifta
 import parity
+
+# load_alifta retired 2026-08-20: the alifta.net page archive is reference
+# notes, not a book — removed from the app (ops/remove_alifta_edition.py)
 
 
 def main() -> None:
@@ -13,7 +15,6 @@ def main() -> None:
     migrate.main()
     load_sunna.main()
     load_shamela.main()
-    load_alifta.main()
     parity.main()
     print(f"ETL complete in {time.time() - t0:.0f}s")
 
