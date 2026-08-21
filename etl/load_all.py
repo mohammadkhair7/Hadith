@@ -6,7 +6,7 @@ import load_sunna
 import load_shamela
 import parity
 
-# load_alifta retired 2026-08-20: the alifta.net page archive is reference
+# load_alifta retired 2026-08-20: the alifta page archive is reference
 # notes, not a book — removed from the app (ops/remove_alifta_edition.py)
 
 

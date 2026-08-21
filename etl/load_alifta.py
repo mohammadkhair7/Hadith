@@ -1,4 +1,4 @@
-"""Load alifta.db (www.alifta.net static archive) into the unified schema.
+"""Load alifta.db (the fatwa-portal static archive) into the unified schema.
 
 The archive is a small set of rendered pages; it becomes one work with one
 edition, one passage per page (HTML preserved for the legacy-content reader).
@@ -17,7 +17,7 @@ def main() -> None:
         if state_done(pg, "alifta_pages"):
             print("[alifta] already loaded")
             return
-        title = "أرشيف الرئاسة العامة للبحوث العلمية والإفتاء (alifta.net)"
+        title = "أرشيف الرئاسة العامة للبحوث العلمية والإفتاء"
         row = pg.execute(
             "SELECT edition_id FROM editions WHERE source='alifta' AND source_book_id=0"
         ).fetchone()

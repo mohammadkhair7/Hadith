@@ -79,7 +79,7 @@ export default function Layout() {
         <Outlet />
       </main>
       <footer className="bg-deep-teal text-islamic-light/70 text-center text-xs py-4">
-        AdvancedHadith — sunna.alifta.gov.sa · alifta.net · al-maktaba al-shamela
+        AdvancedHadith — al-jami3 · al-maktaba al-shamela
       </footer>
     </div>
   );

@@ -1,4 +1,4 @@
-"""Load hadith.db (sunna.alifta.gov.sa crawl) into the unified schema.
+"""Load hadith.db (the الجامع hadith collection crawl) into the unified schema.
 
 Creates: works + editions (one per book), toc_nodes, passages, subjects,
 subject_links. Resumable at book granularity via etl_state.

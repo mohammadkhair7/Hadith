@@ -1,4 +1,4 @@
-"""Remove the alifta.net page-archive pseudo-book (edition 131) from the app:
+"""Remove the alifta page-archive pseudo-book (edition 131) from the app:
 it is a notes/reference archive, not a book (user request 2026-08-20). The raw
 html files remain on disk under Alifta.chat/data/raw as reference material.
 Deletes passages -> edition -> orphaned work. DATABASE_URL-driven (local+Railway)."""

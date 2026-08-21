@@ -1,8 +1,9 @@
 # AdvancedHadith
 
 Unified Hadith knowledge platform merging three corpora — **hadith.db**
-(sunna.alifta.gov.sa), **alifta.db** (www.alifta.net archive) and **alshamela.db**
-(Al-Maktaba Al-Shamela) — into one PostgreSQL + Apache AGE knowledge base with:
+(الجامع hadith collection), **alifta.db** (fatwa-portal reference archive) and
+**alshamela.db** (Al-Maktaba Al-Shamela) — into one PostgreSQL + Apache AGE
+knowledge base with:
 
 - Tashkeel-insensitive keyword search (Postgres FTS + pg_trgm)
 - Semantic search (`gemini-embedding-001` vectors in Redis 8, HNSW)

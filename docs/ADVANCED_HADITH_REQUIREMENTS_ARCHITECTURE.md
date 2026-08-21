@@ -24,9 +24,9 @@ Decision log: `docs/DECISIONS.md`
 
 ## 1. Executive summary
 
-AdvancedHadith merges the three corpora built so far — **hadith.db** (sunna.alifta.gov.sa),
-**alifta.db** (www.alifta.net archive) and **alshamela.db** (Al-Maktaba Al-Shamela CSV +
-PDF) — into one unified **PostgreSQL** knowledge base with:
+AdvancedHadith merges the three corpora built so far — **hadith.db** (الجامع hadith
+collection crawl), **alifta.db** (fatwa-portal reference archive) and **alshamela.db**
+(Al-Maktaba Al-Shamela CSV + PDF) — into one unified **PostgreSQL** knowledge base with:
 
 - **Syntactic search** — full-text keyword search that works **with and without tashkeel**,
   with filters, sorting, and per-book/per-collection scoping.
@@ -125,7 +125,7 @@ everything else** (relational + full-text + graph via Apache AGE + translations)
 
 Cross-source keys already established:
 - `Al-Shamela/book_map.py`: hadith book id ↔ (archive, bkid) — verified 100% text overlap on all 7 testable books.
-- alifta.net ↔ sunna: identical `(BookID, MainID)` space (comparison report §2, `Alifta.chat/docs/HADITH_ALIFTA_COMPARISON_ARCH.md`).
+- alifta archive ↔ sunna: identical `(BookID, MainID)` space (comparison report §2, `Alifta.chat/docs/HADITH_ALIFTA_COMPARISON_ARCH.md`).
 
 Especially valuable for the knowledge graph:
 - **Rijāl biographies**: الثقات (17k pages), الجرح والتعديل, الإصابة في تمييز الصحابة, تاريخ بغداد, تاريخ الإسلام, تحفة التحصيل.
@@ -576,7 +576,7 @@ Two additional classification dimensions, both queryable in keyword/exact search
    Corpus distribution (257,094 chains → 192,458 classified, 75%):
    qudsi 1,712 · marfu_qawli 89,130 · marfu_fili 34,340 · marfu 60,144 ·
    mawquf 695 · maqtu 6,437. «قال الله : ﴿…﴾» is guarded as Quran citation,
-   not قدسي. Taxonomy follows the alifta.net نوع الحديث tree
+   not قدسي. Taxonomy follows the alifta archive's نوع الحديث tree
    (`Alifta.chat/data/raw/viewsubjecttree.html`, `definitions.html`).
 
 Chapter/topic categorization (the third dimension) was already served by the
@@ -617,7 +617,7 @@ Additions (2026-08-20, second pass):
   death dates, assessments.
 - **Atrāf indexes** (تحفة الأشراف، إتحاف المهرة) cross-list isnads per hadith across the
   six books — the validation set for extracted chains and the backbone for takhrij.
-- **alifta.net statistics pages**: **reference design only** (layouts + drill-down
+- **alifta archive statistics pages**: **reference design only** (layouts + drill-down
   workflow for narrator statistics); their counts are not used for validation because the
   archived mirror is incomplete.
 
@@ -1034,7 +1034,7 @@ and unvoweled analysis, and a dedicated **proper-noun analyzer**
 ### 12.7 Automated book indexing — from flat pages to structured hadith display
 
 **How the matn books got their per-hadith display (the model to replicate).**
-The sunna.alifta.gov.sa matn books did not need indexing on our side — the source was
+The الجامع (sunna) matn books did not need indexing on our side — the source was
 *born indexed*, and the crawl preserved that structure in `hadith.db`:
 
 | Structure | Contents | What it enables in the UI |
