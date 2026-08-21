@@ -13,9 +13,10 @@ const JUNK = /AddHistory\([^)]*\)[^;\n]*;?|\[\d+\/\d+\]/g;
 // abjad page-number marker glued to the start of scanned pages ("هـ." "يب." ...)
 const ABJAD_PREFIX = /^(?:[\u0621-\u064A\u0640][\u064B-\u0652\u0670]*){1,4}\.\s*/;
 
-/** Remove source-side noise (crawler junk, leading abjad page numbers) for display. */
+/** Remove source-side noise (crawler junk, leading abjad page numbers,
+ *  § heading markers) for display. */
 export function cleanText(s: string): string {
-  return s.replace(JUNK, " ").replace(ABJAD_PREFIX, "");
+  return s.replace(JUNK, " ").replace(ABJAD_PREFIX, "").replace(/§/g, "");
 }
 
 /** Normalize one char for marker matching (diacritics removed by caller). */
@@ -159,6 +160,64 @@ export function mapRawOffset(diac: string, rawOffset: number): number {
     count++;
   }
   return diac.length;
+}
+
+/* ---------- markdown-style page structure (shamela page display) ---------- */
+
+export type PageBlock = { kind: "h1" | "h2" | "h3" | "para"; from: number; to: number };
+
+// mirrors ops/build_shamela_toc.py heading grammar
+const H_DECOR = /^[\s\d\u0660-\u0669\-–—=*.،:()\[\]«»_§]+/;
+const H_SKIP = /^(البحر\s|ص\s*[::]?\s*\d|\d|رقم\s)/;
+const H_K1 = /^(كتاب|ابواب|سوره|تفسير سوره)\s+\S/;
+const H_K2 = /^باب(\s|$)/;
+const H_K3 = /^(فصل|مقدمه|خاتمه|مساله)(\s|$)/;
+
+function headingKind(line: string): "h1" | "h2" | "h3" | null {
+  const t = line.trim();
+  if (t.length < 3 || t.length > 160) return null;
+  let bare = "";
+  for (const c of stripTashkeel(t)) bare += normChar(c);
+  bare = bare.trim();
+  const bracketed = /^\[.{2,140}\]$/.test(bare);
+  const core = bare.replace(H_DECOR, "").replace(/[\][]+$/, "").trim();
+  if (!core || core.length > 95) return null;
+  if (H_K1.test(core)) return "h1";
+  if (H_K2.test(core)) return "h2";
+  if (H_K3.test(core)) return "h3";
+  if ((bracketed || t.startsWith("§")) && !H_SKIP.test(core)) return "h3";
+  return null;
+}
+
+/** Split a page into heading and paragraph blocks (RAW-text offsets).
+ *  Consecutive non-heading lines form ONE paragraph block, so hadith
+ *  segmentation and matn detection keep working on whole passages. */
+export function pageBlocks(raw: string): PageBlock[] {
+  const blocks: PageBlock[] = [];
+  let pos = 0;
+  let paraFrom = -1;
+  const flush = (end: number) => {
+    if (paraFrom >= 0 && end > paraFrom) blocks.push({ kind: "para", from: paraFrom, to: end });
+    paraFrom = -1;
+  };
+  for (const line of raw.split("\n")) {
+    const start = pos;
+    const end = pos + line.length;
+    pos = end + 1;
+    if (!line.trim()) {
+      flush(start);
+      continue;
+    }
+    const k = headingKind(line);
+    if (k) {
+      flush(start);
+      blocks.push({ kind: k, from: start, to: end });
+    } else if (paraFrom < 0) {
+      paraFrom = start;
+    }
+  }
+  flush(raw.length);
+  return blocks;
 }
 
 export type DisplayPrefs = {

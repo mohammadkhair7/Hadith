@@ -68,7 +68,8 @@ export default function Reader() {
         <div className="bg-white rounded-xl shadow p-3 sticky top-20 max-h-[80vh] overflow-y-auto toc-scroll">
           <h3 className="font-bold text-islamic-teal border-b pb-2 mb-2">{t("reader_toc")}</h3>
           {roots.map((n) => (
-            <TocBranch key={n.toc_node_id} node={n} editionId={editionId!} gotoSeq={gotoSeq} />
+            <TocBranch key={n.toc_node_id} node={n} editionId={editionId!} gotoSeq={gotoSeq}
+              defaultOpen={roots.length <= 3} />
           ))}
         </div>
       </aside>
@@ -109,6 +110,7 @@ export default function Reader() {
                 {useHadithText ? (
                   <HadithText raw={raw} diac={passage.text_diac}
                     sanadEndRaw={dbBoundary} spans={passage.structure_spans}
+                    formatted={passage.source === "shamela"}
                     prefs={prefs} />
                 ) : (
                   <div className="arabic-text legacy-content"
@@ -169,11 +171,21 @@ function PageJump({ seq, total, gotoSeq }: {
   );
 }
 
-function TocBranch({ node, editionId, gotoSeq }: {
-  node: TocNode; editionId: string; gotoSeq: (s: number) => void;
+function TocBranch({ node, editionId, gotoSeq, defaultOpen = false }: {
+  node: TocNode; editionId: string; gotoSeq: (s: number) => void; defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [children, setChildren] = useState<TocNode[] | null>(null);
+
+  // root nodes come pre-expanded so the index is immediately browsable
+  useEffect(() => {
+    if (!defaultOpen || node.is_leaf) return;
+    let alive = true;
+    api(`/editions/${editionId}/toc?parent_id=${node.toc_node_id}`)
+      .then((r: any) => { if (alive) { setChildren(r.nodes); setOpen(true); } })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [node.toc_node_id, editionId, defaultOpen]);
 
   async function toggle() {
     if (node.is_leaf) {

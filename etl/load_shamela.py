@@ -73,7 +73,8 @@ def main() -> None:
                             (bkid,),
                         )
                     ):
-                        nass = nass or ""
+                        # shamela uses bare \r as line separator; use real newlines
+                        nass = (nass or "").replace("\r", "\n")
                         meta = {}
                         if hno:
                             meta["hno"] = hno
