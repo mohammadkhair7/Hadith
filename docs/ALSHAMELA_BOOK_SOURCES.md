@@ -178,24 +178,19 @@ Alternates worth considering (same works):
 
 Alternates: سير أعلام النبلاء ط الحديث `16\b22669.csv` (p 10,265); لسان الميزان ط النظامية `16\b12063.csv` (p 4,148); الكامل في ضعفاء الرجال ط العلمية `13\b12579.csv` (p 4,520).
 
-### 4.3 Flags needing a decision
+### 4.3 Flags — DECIDED (user approval, 2026-08-21)
 
-1. **Duplicate work — شرح مشكل الآثار**: work 24 (aljam3 #31, 7,274 pages) and
-   work 61 (aljam3 #85, 1,004 pages) are both titled شرح مشكل الآثار للطحاوي.
-   Both would map to the same Shamela book (bkid 22547). Recommendation:
-   attach the Shamela edition to work 24 only, and investigate whether
-   aljam3 #85 is a partial duplicate that should be merged into work 24
-   (or is actually a different selection, e.g. المعتصر).
-2. **تهذيب الكمال sizes**: the Shamela ط الرسالة (19,037 pp) is much larger than
-   aljam3 (11,497) — expected (35 vols with indexes); fine to load.
-3. **الكاشف/تقريب التهذيب sizes**: aljam3 paginates per-entry (8k/12k rows) while
-   Shamela paginates per printed page (1,220/692) — expected, not an error.
-4. **Two works remain aljam3-less by design**: الجرح والتعديل (work 48) and
-   فتح المغيث (work 55) exist only as Shamela editions (their aljam3 crawls had
-   no content and the stubs were removed). No action needed.
-5. **Volume**: the 49 recommended books total **≈ 408,000 pages** — this more
-   than doubles the current 276k Shamela pages. Load order below is chosen so
-   the six canonical books go first.
+1. **Duplicate work — شرح مشكل الآثار**: work 61 (aljam3 #85, 1,004 pages) is a
+   redundant, much shorter duplicate of work 24 (aljam3 #31, 7,274 pages).
+   **Decision: remove work 61** (its aljam3 edition and the work row) as step 0
+   of the load phase; the Shamela edition (bkid 22547) attaches to work 24
+   only. This drops the Part B count to **49 books**.
+2. **تهذيب الكمال**: the Shamela ط الرسالة (19,037 pp) is **approved to load**.
+3. **الكاشف/تقريب التهذيب sizes**: known fact, expected — not an error.
+4. **الجرح والتعديل (work 48) and فتح المغيث (work 55)**: approved to remain
+   Shamela-only.
+5. **Volume**: not a concern. The direction is to reach Shamela equivalence for
+   every aljam3 book — and eventually **more** Shamela books than aljam3 books.
 
 ## 5. Preprocessing pipeline (per approved book)
 
@@ -254,16 +249,102 @@ new content.
 
 ## 6. Suggested load order
 
+0. Remove the redundant work 61 (شرح مشكل الآثار duplicate — §4.3 decision 1).
 1. **The six canonical books** (مسلم، أبو داود، الترمذي، النسائي، ابن ماجه، الموطأ) — highest reader value.
 2. Remaining matn books, smallest first (المراسيل، الشمائل، الحميدي، المنتخب، المعجم الصغير، المنتقى…), the giants last (مصنف ابن أبي شيبة، السنن الكبرى للبيهقي، المعجم الكبير، مسند أحمد).
 3. Analysis books (rijāl/ʿilal/shurūḥ), smallest first.
-4. Flags in §4.3 resolved as decided during approval.
 
 ## 7. Approval checklist
 
+- [x] §4.3 flags — all five decided (2026-08-21); work 61 to be removed
 - [ ] Part B §4.1 matn mappings approved (or edition swaps noted per row)
 - [ ] Part B §4.2 analysis-book mappings approved
-- [ ] §4.3 flag 1: شرح مشكل الآثار duplicate — merge W61 into W24? or map separately?
-- [ ] Choice of alternates (الترمذي ت شاكر vs ت بشار؛ مسند أحمد مخرجا vs ط الرسالة؛ المطالب العالية العادية vs المحققة)
+- [ ] Choice of alternates (مسند أحمد مخرجا vs ط الرسالة؛ ابن حبان مخرجا vs محققا)
 - [ ] Load order approved
 - [ ] Approval to run the pipeline locally, then on Railway
+
+## 8. Feasibility study (future option): retiring aljam3 and relying on Shamela only
+
+**Question**: to avoid duplicated text and reduce disk size, could we later remove
+the aljam3 (sunna) editions entirely and rely on the Shamela editions alone —
+without losing narrator (rāwī) references, hadith numbers, and traceability?
+
+**Short answer**: feasible, but **not** as a simple deletion. The aljam3 unit
+rows are currently the *analytical backbone* of the database — everything
+narrator- and hadith-level hangs off them. A safe retirement requires a
+"unitization + crosswalk" migration first. With that done, equivalent
+traceability through Shamela is achievable.
+
+### 8.1 What depends on aljam3 today
+
+aljam3 editions store one row **per hadith** (`passages.kind='unit'`) with
+`hadith_num` (the standard numbering) and `sanad_end_raw` (the sanad/matn
+boundary offset). Shamela editions store one row **per printed page**
+(`kind='page'`) — a page can hold several hadiths, or a hadith can span pages;
+`hno` page metadata exists for many but not all books.
+
+Deleting the aljam3 editions today would cascade through `passage_id` and wipe:
+
+| Dependent data | Effect of naive deletion |
+|---|---|
+| `isnad_links` (narrator ↔ hadith links, built by `ops/build_kg.py` from unit sanad text) | narrator graph, mention counts, top narration paths, narrator directory book/topic filters — all emptied |
+| `hadith_types` (marfūʿ/mawqūf/… classification per unit) | types analytics tab emptied |
+| `hadith_dates` (timeline tiers built on units) | timeline tab emptied |
+| unit-level `passage_annotations` and Redis embeddings | unit search hits and tashkeel layers for units gone |
+| `hadith_num` standard numbering | no direct hadith-number lookup anymore |
+| grades (`extract_grades`), compare view unit side, hadith permalinks (`/passage/:id`) | broken or degraded |
+
+The AGE graph itself is narrator-level, but it is *derived from* `isnad_links`,
+so it would be rebuilt empty. In short: naive deletion destroys the knowledge
+graph, not just duplicate text.
+
+### 8.2 The safe migration path (unitization + crosswalk)
+
+1. **Unitize Shamela pages** — segment each Shamela edition into hadith units
+   using the already-working heading/hadith-number grammar (the same one the
+   TOC builder and the reader's display heuristics use) plus the per-page
+   `hno` anchors. Store as new `kind='unit'` passages under the *same Shamela
+   edition*, each carrying `hadith_num`, its source page ids, and a recomputed
+   `sanad_end_raw` on the Shamela wording.
+2. **Build a permanent crosswalk table** *before any deletion* —
+   `unit_map(aljam3_passage_id, shamela_passage_id, hadith_num, confidence)`,
+   matched by hadith number + normalized-text overlap (the technique
+   `evaluate_matches.py` already uses, which scored 100% on sampled pages for
+   all mapped books). This table is small and is the traceability insurance:
+   every historical reference remains resolvable forever.
+3. **Re-point, don't re-derive** — `UPDATE isnad_links / hadith_types /
+   hadith_dates SET passage_id = <shamela unit id>` via the crosswalk. This
+   preserves all curated knowledge (narrator merges, manual edges, gradings)
+   without re-running extraction. Only `sanad_end_raw`-dependent display
+   offsets need recomputation because Shamela wording differs slightly
+   (ثنا vs حدثنا، وآله vs وسلم).
+4. **Verify parity, then delete** — coverage report per book (units matched /
+   unmatched); only books at ~100% crosswalk coverage get their aljam3
+   edition dropped. Works rows stay; the Shamela edition becomes primary.
+5. **Rebuild derived layers** — AGE graph rebuild (`build_kg.py
+   --resolve-only --rebuild-graph`), embeddings for the new unit rows,
+   analytics cache warm.
+
+### 8.3 Traceability after removal
+
+- **Hadith numbers**: preserved — the unitization step carries `hadith_num`
+  onto the Shamela units (validated against `hno` and the printed numbering
+  in the text), and the crosswalk maps old ids to new ids.
+- **Rāwī references**: preserved — `isnad_links` rows survive by re-pointing;
+  narrator ids, aliases, assessments, and manual merges are untouched (they
+  reference `narrators`, not aljam3).
+- **Citations**: improve, if anything — Shamela units carry (كتاب/جزء/صفحة)
+  printed-page provenance, which aljam3 rows lack.
+
+### 8.4 Caveats and recommendation
+
+- Unitization quality is the critical path: books with sparse `hno` metadata
+  and run-on page text (muṣannafāt) will need the sanad-detector heuristics;
+  expect a manual QA pass per book.
+- Disk savings are real but moderate: aljam3 unit text duplicates Shamela page
+  text (~roughly the same order as the 276k Shamela pages), while embeddings
+  and annotations scale with whatever layer we keep.
+- **Recommendation**: load all Part B books first, run unitization as its own
+  project, and retire aljam3 book-by-book only when that book's crosswalk hits
+  full coverage. Keep the crosswalk table permanently. Do not delete aljam3
+  wholesale before the unit layer exists.
