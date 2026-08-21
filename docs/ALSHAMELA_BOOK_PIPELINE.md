@@ -69,10 +69,19 @@ python Al-Shamela\evaluate_matches.py
 ```
 
 Samples 20 aljam3 pages per mapped book and checks a mid-page fragment exists
-verbatim (letters-only normalization) in the staged Shamela text. **Require a
-high hit rate (pilot: 20/20 = 100%) before loading**; a low rate means the
-wrong edition/print was mapped. Books without aljam3 content are skipped —
-for those, eyeball a few staged pages instead.
+verbatim (letters-only normalization) in the staged Shamela text.
+
+**This check is informational, not a gate.** The Shamela and aljam3 copies of
+a work are often *different prints* (publisher, تحقيق, page format, coverage —
+e.g. سنن سعيد بن منصور scores 45% only because the approved Shamela edition
+lacks the تفسير volumes aljam3 includes), so a sub-100% rate is expected and
+acceptable. **The book mappings were manually verified as equivalent works by
+the project owner (2026-08-21), and every approved book is processed without
+requiring perfect page-level equivalence.** Use a low rate only as a prompt
+to *explain* the difference (print variance vs a genuinely wrong bkid — a
+wrong bkid shows near-0% plus a mismatched title/author in the index).
+Batch reference: 46 of 48 books scored 85–100%; the two below that were
+print-coverage differences, loaded as approved.
 
 ## 4. Load into local Postgres
 
@@ -135,27 +144,29 @@ One command, three results (design: `ALSHAMELA_BOOK_SOURCES.md` §5A):
                  "mean_conf": 0.7341, "high_conf": 7004, "high_share": 0.9226 } }
 ```
 
-Red flags: coverage well below ~0.95, mean confidence below ~0.6, or
-`distinct_nums` far off the aljam3 distinct count (Muslim: 3,013 vs 3,011) —
-usually the wrong numbering scheme or a different print.
+The crosswalk numbers are **advisory, not a gate** (same policy as step 3):
+different prints legitimately produce partial coverage or lower confidence
+(different numbering scheme, missing volumes, variant readings). Low numbers
+mean "this book's crosswalk is thinner — rely on `hadith_seq`/text matching
+rather than printed numbers for it", not "don't load it". All approved books
+are processed regardless; the report is stored for the §8 retirement study,
+which *does* require high coverage before an aljam3 book may be retired.
 
-## 7. Neural annotations (GPU)
+## 7. Neural structure annotation (GPU)
 
 ```powershell
 $env:PYTHONPATH = "e:\Quran Computing Institute\Hadith.chat\AdvancedHadith\Arabic-lib"
 $py = "Arabic-lib\.venv-gpu\Scripts\python.exe"
 & $py -m arabiclib.neural.indexing annotate --edition 132   # sanad/matn spans
-& $py -m arabiclib.neural.tashkeel annotate --edition 132   # tashkeel for bare words
+# batch form: --all-shamela (resumable per edition via etl_state)
 ```
 
-Both write `passage_annotations` (layers `structure` / `diacritized`) and are
-resumable per edition. One GPU job at a time — they contend badly. The reader
-uses these for matn highlighting and the Tashkeel toggle automatically.
-
-Then backfill the sanad/matn boundary into the units:
+Writes `passage_annotations` (layer `structure`) for matn highlighting.
+One GPU job at a time — jobs contend badly. Then backfill the sanad/matn
+boundary into the units:
 
 ```powershell
-python ops\unitize_shamela.py --edition 132 --fill-sanad
+python ops\unitize_shamela.py --edition 132 --fill-sanad   # or omit --edition for all
 ```
 
 ## 8. Embeddings (semantic search)
@@ -169,7 +180,35 @@ semantic + hybrid query against the edition. Pilot: 9,614 chunks, 0 errors,
 ~2 minutes. (On production, embeddings run against the production Redis from
 Admin → Embeddings instead.)
 
-## 9. Local verification
+## 9. Tashkeel — ALWAYS the closing step
+
+Tashkeel generation runs **last**, after the book's pages, TOC, units, and
+structure spans are in place, so the diacritized layer is computed over the
+final text:
+
+```powershell
+& $py -m arabiclib.neural.tashkeel annotate --edition 132   # bare words only
+# batch form: --all-shamela (resumable; skips already-annotated editions)
+```
+
+Writes `passage_annotations` layer `diacritized` (engine `neural-tashkeel`) —
+diacritics are added **only to fully-bare words**; existing partial tashkeel
+in the source text is never altered. A book is not "done" until the Tashkeel
+toggle is verified on it:
+
+```powershell
+# API check: text_diac must be non-null once the edition is annotated
+$p = (Invoke-RestMethod "http://localhost:8090/api/v1/editions/132/passages?seq=500")
+[bool]$p[0].text_diac
+```
+
+Then in the reader (http://localhost:5173): open the book and flip the
+**التشكيل** button both ways — ON shows the diacritized layer, OFF shows the
+stripped view; matn highlighting must survive both states (the renderer maps
+raw offsets through `stripTashkeel`/`mapRawOffset`, so no per-book work is
+needed — this is a verification step, not a build step).
+
+## 10. Local verification
 
 ```powershell
 $w = Invoke-RestMethod "http://localhost:8090/api/v1/works/2"
@@ -179,12 +218,12 @@ Invoke-RestMethod "http://localhost:8090/api/v1/editions/132/passages?seq=500"
 ```
 
 Reader smoke test at http://localhost:5173 : open the book, check TOC root
-expanded, page renders with block formatting, Tashkeel toggle, matn
+expanded, page renders with block formatting, Tashkeel toggle (step 9), matn
 highlighting (after step 7), and the edition switcher.
 
 ---
 
-## 10. Railway connection (per session)
+## 11. Railway connection (per session)
 
 The production Postgres URL is **never stored or printed**. Rebuild it into
 the shell env from the linked service's variables (the `Postgres` service's
@@ -200,7 +239,7 @@ if ($a.DATABASE_URL -match '^postgres(?:ql)?://([^:]+):([^@]+)@') {
 python ops\railway_pg_check.py                            # probe: version/size
 ```
 
-## 11. Load + process on Railway
+## 12. Load + process on Railway
 
 Same scripts, pointed at production. The unit tables are **rebuilt
 deterministically on Railway, never copied by serial id** — passage ids can
@@ -229,7 +268,7 @@ python ops\railway_push_annotations.py
 Remove-Item Env:DATABASE_URL                   # ALWAYS restore when done
 ```
 
-## 12. Production verification
+## 13. Production verification
 
 ```powershell
 (Invoke-RestMethod "https://hadith-chat.up.railway.app/api/v1/works/2").editions
@@ -249,13 +288,18 @@ Plus a reader spot check on https://hadith-chat.up.railway.app.
 | 3 | Verify identity | `python Al-Shamela\evaluate_matches.py` | — |
 | 4 | Load pages | `python etl\load_shamela.py` | local PG |
 | 5 | Book index | `python ops\build_shamela_toc.py --edition N` | local PG |
-| 6 | Unitize + crosswalk | `python ops\unitize_shamela.py --edition N` | local PG |
-| 7 | Structure + tashkeel | `…neural.indexing/tashkeel annotate --edition N` then `unitize --fill-sanad` | local PG |
+| 6 | Unitize + crosswalk | `python ops\unitize_shamela.py --edition N` (advisory report) | local PG |
+| 7 | Structure spans | `…neural.indexing annotate --edition N` then `unitize --fill-sanad` | local PG |
 | 8 | Embeddings | `python ops\pilot_embed.py N` | local Redis |
-| 9 | Verify | API + reader smoke test | local |
-| 10 | Connect prod | `railway variables` → `RAILWAY_PG_URL` (env only) | — |
-| 11 | Load + process prod | steps 4–6 with swapped env, then `railway_push_annotations.py` | Railway |
-| 12 | Verify prod | API + reader spot check | Railway |
+| 9 | **Tashkeel (closing step)** | `…neural.tashkeel annotate --edition N` + toggle verification | local PG |
+| 10 | Verify | API + reader smoke test (incl. التشكيل on/off) | local |
+| 11 | Connect prod | `railway variables` → `RAILWAY_PG_URL` (env only) | — |
+| 12 | Load + process prod | steps 4–6 with swapped env, then `railway_push_annotations.py` (after step 9) | Railway |
+| 13 | Verify prod | API + reader spot check | Railway |
+
+Identity/crosswalk numbers never block a book: the owner has manually
+verified the approved mappings are equivalent works; print-level differences
+(publisher, page format, coverage) are expected and recorded, not fixed.
 
 Markdown-style page rendering requires **no per-book step** — the frontend
 block renderer works off raw text offsets and picks up every shamela edition

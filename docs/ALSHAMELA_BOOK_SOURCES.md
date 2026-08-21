@@ -204,9 +204,12 @@ no new tooling is required except registering the mappings.
    `hno`/`sora`/`aya`), computes `nass_norm`, resumable (books already loaded
    with expected counts are skipped). Log: `build-log.txt`.
 3. **Verify identity** — `python Al-Shamela\evaluate_matches.py` for books where
-   aljam3 has text: sampled pages must match the mapped Shamela book on
-   letters-only normalized comparison (the first 40 books scored 100%).
-   Fix any mismatch before loading.
+   aljam3 has text: sampled pages are checked against the mapped Shamela book
+   on letters-only normalized comparison. **Informational, not a gate**
+   (owner decision 2026-08-21): the two sources are different prints, so
+   sub-100% rates from publisher/format/coverage differences are expected;
+   all approved books load regardless. A near-0% rate is the only signal of a
+   genuinely wrong bkid.
 4. **Load into Postgres** — `python etl\load_shamela.py` (from `AdvancedHadith\`).
    Attaches the edition to the existing work via the aljam3 edition
    (`source='sunna' AND source_book_id=<hadith_book_id>`), converts bare `\r`
