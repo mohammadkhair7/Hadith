@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api";
+import AskPanel from "../components/AskPanel";
 import ExportBar from "../components/ExportBar";
 
 const stripTags = (s: string) => (s || "").replace(/<[^>]+>/g, "");
@@ -12,7 +13,15 @@ export default function Search() {
   const { t } = useTranslation();
   const [params, setParams] = useSearchParams();
   const q = params.get("q") || "";
+  const tab = params.get("tab") === "ask" ? "ask" : "texts";
   const [input, setInput] = useState(q);
+
+  function setTab(next: "texts" | "ask") {
+    const p = new URLSearchParams(params);
+    if (next === "ask") p.set("tab", "ask");
+    else p.delete("tab");
+    setParams(p);
+  }
   const [mode, setMode] = useState<"keyword" | "exact" | "semantic" | "hybrid">("keyword");
   const [source, setSource] = useState("");
   const [transmission, setTransmission] = useState("");
@@ -30,7 +39,7 @@ export default function Search() {
 
   useEffect(() => {
     setInput(q);
-    if (!q) return;
+    if (!q || tab === "ask") return;
     setLoading(true);
     const sp = new URLSearchParams({ q, mode, limit: String(limit), offset: String(page * limit) });
     if (source) sp.set("source", source);
@@ -41,12 +50,32 @@ export default function Search() {
       .then(setResult)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [q, mode, source, transmission, htype, grade, page]);
+  }, [q, mode, source, transmission, htype, grade, page, tab]);
 
   const facetsActive = mode === "keyword" || mode === "exact";
 
+  const tabCls = (active: boolean) =>
+    `px-5 py-2 rounded-t-xl text-sm font-bold transition-colors border-b-2 ${
+      active
+        ? "border-islamic-gold text-deep-teal bg-white shadow-sm"
+        : "border-transparent text-gray-400 hover:text-islamic-teal"
+    }`;
+
   return (
     <div>
+      <div className="flex gap-1 mb-4 border-b border-islamic-teal/20">
+        <button onClick={() => setTab("texts")} className={tabCls(tab === "texts")}>
+          {t("search_tab_texts")}
+        </button>
+        <button onClick={() => setTab("ask")} className={tabCls(tab === "ask")}>
+          {t("ask_title")}
+        </button>
+      </div>
+
+      {tab === "ask" ? (
+        <AskPanel key={q} initialQ={input} />
+      ) : (
+      <>
       <form
         onSubmit={(e) => { e.preventDefault(); setPage(0); setParams({ q: input }); }}
         className="flex flex-wrap gap-2 mb-5"
@@ -181,6 +210,8 @@ export default function Search() {
             </div>
           )}
         </>
+      )}
+      </>
       )}
     </div>
   );

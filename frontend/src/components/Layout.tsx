@@ -41,7 +41,6 @@ export default function Layout() {
             <NavLink to="/books" className={link}>{t("nav_books")}</NavLink>
             <NavLink to="/search" className={link}>{t("nav_search")}</NavLink>
             <NavLink to="/subjects" className={link}>{t("nav_subjects")}</NavLink>
-            <NavLink to="/ask" className={link}>{t("nav_ask")}</NavLink>
             <NavLink to="/narrators" className={link}>{t("nav_narrators")}</NavLink>
             <NavLink to="/analytics" className={link}>{t("nav_analytics")}</NavLink>
             <NavLink to="/timeline" className={link}>{t("nav_timeline")}</NavLink>

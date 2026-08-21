@@ -2,11 +2,14 @@ import { FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { api } from "../api";
-import ExportBar from "../components/ExportBar";
+import ExportBar from "./ExportBar";
 
-export default function Ask() {
+/** Natural-language question panel (اسأل الموسوعة): routes to NL2SQL /
+ *  NL2CYPHER / semantic retrieval and shows the answer with citations.
+ *  Rendered as a tab inside the unified Search page. */
+export default function AskPanel({ initialQ = "" }: { initialQ?: string }) {
   const { t, i18n } = useTranslation();
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(initialQ);
   const [loading, setLoading] = useState(false);
   const [res, setRes] = useState<any>(null);
   const [error, setError] = useState("");
@@ -32,8 +35,7 @@ export default function Ask() {
 
   return (
     <div className="max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold mb-1">{t("ask_title")}</h1>
-      <p className="text-sm text-gray-500 mb-5">{t("ask_sub")}</p>
+      <p className="text-sm text-gray-500 mb-4">{t("ask_sub")}</p>
 
       <form onSubmit={submit} className="flex gap-2 mb-6">
         <input

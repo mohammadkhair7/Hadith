@@ -1,4 +1,4 @@
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout";
 import Home from "./pages/Home";
 import Search from "./pages/Search";
@@ -6,7 +6,6 @@ import Books from "./pages/Books";
 import Reader from "./pages/Reader";
 import Passage from "./pages/Passage";
 import Subjects from "./pages/Subjects";
-import Ask from "./pages/Ask";
 import Narrators from "./pages/Narrators";
 import Analytics from "./pages/Analytics";
 import Timeline from "./pages/Timeline";
@@ -27,7 +26,8 @@ export default function App() {
         <Route path="/read/:editionId" element={<Reader />} />
         <Route path="/passage/:passageId" element={<Passage />} />
         <Route path="/subjects" element={<Subjects />} />
-        <Route path="/ask" element={<Ask />} />
+        {/* اسأل الموسوعة now lives as a tab inside the unified Search page */}
+        <Route path="/ask" element={<Navigate to="/search?tab=ask" replace />} />
         <Route path="/narrators" element={<Narrators />} />
         <Route path="/analytics" element={<Analytics />} />
         <Route path="/timeline" element={<Timeline />} />

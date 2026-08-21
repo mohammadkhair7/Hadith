@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../api";
 
@@ -15,7 +15,7 @@ type Facets = {
   books: { edition_id: number; title_ar: string }[];
 };
 
-const PAGE = 25;
+const PAGE = 1000;
 const EMPTY = {
   q_name: "", narrator_id: "", generation: "", grade: "", place: "",
   death_from: "", death_to: "", teacher: "", student: "",
@@ -32,8 +32,10 @@ export default function NarratorDirectory({ onOpen }: { onOpen: (id: number) => 
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState<number | null>(null);
   const [page, setPage] = useState(0);
+  const [pageInput, setPageInput] = useState("1");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const tableRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     api("/narrators/directory/facets").then(setFacets).catch(() => {});
@@ -49,6 +51,8 @@ export default function NarratorDirectory({ onOpen }: { onOpen: (id: number) => 
       setRows(d.items);
       setTotal(d.total);
       setPage(p);
+      setPageInput(String(p + 1));
+      tableRef.current?.scrollTo({ top: 0 });
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -136,9 +140,9 @@ export default function NarratorDirectory({ onOpen }: { onOpen: (id: number) => 
           <div className="text-xs text-gray-500 mb-2">
             {t("dir_total", { n: total.toLocaleString("en") })}
           </div>
-          <div className="overflow-x-auto">
+          <div ref={tableRef} className="overflow-x-auto overflow-y-auto max-h-[600px]">
             <table className="w-full text-sm min-w-[760px]">
-              <thead>
+              <thead className="sticky top-0 z-10">
                 <tr className="bg-islamic-teal text-white text-xs">
                   <th className="p-2 text-start rounded-s-lg">#</th>
                   <th className="p-2 text-start">{t("dir_c_name")}</th>
@@ -177,7 +181,24 @@ export default function NarratorDirectory({ onOpen }: { onOpen: (id: number) => 
             <div className="flex items-center justify-center gap-3 mt-3 text-sm">
               <button disabled={page === 0 || loading} onClick={() => load(page - 1)}
                 className="px-3 py-1 rounded-lg bg-islamic-light disabled:opacity-40">‹</button>
-              <span className="text-xs text-gray-500">{page + 1} / {pages}</span>
+              <span className="flex items-center gap-1 text-xs text-gray-500" dir="ltr">
+                <input value={pageInput} type="number" min={1} max={pages}
+                  onChange={(e) => setPageInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const n = parseInt(pageInput, 10);
+                      if (n >= 1 && n <= pages && n - 1 !== page) load(n - 1);
+                    }
+                  }}
+                  onBlur={() => {
+                    const n = parseInt(pageInput, 10);
+                    if (n >= 1 && n <= pages && n - 1 !== page) load(n - 1);
+                    else setPageInput(String(page + 1));
+                  }}
+                  className="w-16 text-center border border-islamic-teal/40 rounded-lg px-1 py-0.5 outline-none focus:border-islamic-teal" />
+                <span>/ {pages.toLocaleString("en")}</span>
+              </span>
               <button disabled={page + 1 >= pages || loading} onClick={() => load(page + 1)}
                 className="px-3 py-1 rounded-lg bg-islamic-light disabled:opacity-40">›</button>
             </div>

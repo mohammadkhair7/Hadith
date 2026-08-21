@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { api } from "../api";
@@ -11,23 +11,52 @@ const GRADE_AR: Record<string, string> = {
 
 export default function Analytics() {
   const { t } = useTranslation();
+  const NARR_PAGE = 1000;
+  const PAIR_PAGE = 100;
   const [ov, setOv] = useState<any>(null);
   const [grades, setGrades] = useState<any>(null);
-  const [narrators, setNarrators] = useState<any[]>([]);
-  const [pairs, setPairs] = useState<any[]>([]);
+  const [narrators, setNarrators] = useState<{ total: number; items: any[]; page: number }>(
+    { total: 0, items: [], page: 0 });
+  const [pairs, setPairs] = useState<{ total: number; items: any[]; page: number }>(
+    { total: 0, items: [], page: 0 });
   const [lengths, setLengths] = useState<any[]>([]);
   const [verbs, setVerbs] = useState<any[]>([]);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const narrBusy = useRef(false);
+  const pairBusy = useRef(false);
+  const narrRef = useRef<HTMLDivElement>(null);
+  const pairRef = useRef<HTMLDivElement>(null);
+
+  async function loadNarrators(page: number) {
+    if (narrBusy.current) return;
+    narrBusy.current = true;
+    try {
+      const d: any = await api(`/analytics/top-narrators?limit=${NARR_PAGE}&offset=${page * NARR_PAGE}`);
+      setNarrators({ total: d.total, items: d.items, page });
+      narrRef.current?.scrollTo({ top: 0 });
+    } catch { /* panel stays empty */ } finally { narrBusy.current = false; }
+  }
+
+  async function loadPairs(page: number) {
+    if (pairBusy.current) return;
+    pairBusy.current = true;
+    try {
+      const d: any = await api(`/analytics/top-pairs?limit=${PAIR_PAGE}&offset=${page * PAIR_PAGE}`);
+      setPairs({ total: d.total, items: d.items, page });
+      pairRef.current?.scrollTo({ top: 0 });
+    } catch { /* panel stays empty */ } finally { pairBusy.current = false; }
+  }
 
   useEffect(() => {
     setFailed(false);
     api("/analytics/overview").then(setOv).catch(() => setFailed(true));
     api("/analytics/grades").then(setGrades).catch(() => {});
-    api("/analytics/top-narrators?limit=20").then(setNarrators).catch(() => {});
-    api("/analytics/top-pairs?limit=20").then(setPairs).catch(() => {});
+    loadNarrators(0);
+    loadPairs(0);
     api("/analytics/chain-lengths").then(setLengths).catch(() => {});
     api("/analytics/verbs").then(setVerbs).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attempt]);
 
   if (!ov) {
@@ -149,19 +178,21 @@ export default function Analytics() {
           </Section>
         )}
 
-        {/* top narrators */}
-        {narrators.length > 0 && (
-          <Section title={t("an_top_narrators")}
+        {/* top narrators — unlimited, loads more as you scroll */}
+        {narrators.items.length > 0 && (
+          <Section title={`${t("an_top_narrators")} (${narrators.total.toLocaleString("en")})`}
             exp={{
               title: t("an_top_narrators"),
               csv: () => [[t("nav_narrators"), t("narrators_mentions"), t("narrators_chains"), t("an_books")],
-                ...narrators.map((n: any) => [n.canonical_ar, n.mentions, n.chains, n.books])],
+                ...narrators.items.map((n: any) => [n.canonical_ar, n.mentions, n.chains, n.books])],
             }}>
-            <div className="bg-white rounded-xl shadow divide-y">
-              {narrators.map((n: any, i: number) => (
+            <div ref={narrRef} className="bg-white rounded-xl shadow divide-y max-h-[480px] overflow-y-auto">
+              {narrators.items.map((n: any, i: number) => (
                 <Link key={n.narrator_id} to={`/narrators?id=${n.narrator_id}`}
                   className="flex items-center gap-2 px-3 py-1.5 hover:bg-islamic-teal/5 text-sm">
-                  <span className="w-5 text-xs text-gray-400">{i + 1}</span>
+                  <span className="w-9 text-xs text-gray-400 shrink-0">
+                    {narrators.page * NARR_PAGE + i + 1}
+                  </span>
                   <span className="w-2.5 h-2.5 rounded-full shrink-0"
                     style={{ background: NEON[i % NEON.length] }} />
                   <span className="font-arabic flex-1 truncate">{n.canonical_ar}</span>
@@ -169,22 +200,26 @@ export default function Analytics() {
                 </Link>
               ))}
             </div>
+            <Pager page={narrators.page} pageSize={NARR_PAGE} total={narrators.total}
+              onGo={loadNarrators} />
           </Section>
         )}
       </div>
 
-      {/* top transmission pairs */}
-      {pairs.length > 0 && (
-        <Section title={t("an_top_pairs")}
+      {/* top transmission pairs — unlimited, loads more as you scroll */}
+      {pairs.items.length > 0 && (
+        <Section title={`${t("an_top_pairs")} (${pairs.total.toLocaleString("en")})`}
           exp={{
             title: t("an_top_pairs"),
             csv: () => [[t("an_student"), t("an_teacher"), t("an_count")],
-              ...pairs.map((p: any) => [p.student, p.teacher, p.weight])],
+              ...pairs.items.map((p: any) => [p.student, p.teacher, p.weight])],
           }}>
-          <div className="bg-white rounded-xl shadow divide-y">
-            {pairs.map((p: any, i: number) => (
+          <div ref={pairRef} className="bg-white rounded-xl shadow divide-y max-h-[560px] overflow-y-auto">
+            {pairs.items.map((p: any, i: number) => (
               <div key={i} className="flex items-center gap-2 px-3 py-1.5 text-sm font-arabic">
-                <span className="w-5 text-xs text-gray-400">{i + 1}</span>
+                <span className="w-9 text-xs text-gray-400 shrink-0">
+                  {pairs.page * PAIR_PAGE + i + 1}
+                </span>
                 <Link to={`/narrators?id=${p.student_id}`} className="hover:text-islamic-teal font-bold">
                   {p.student}
                 </Link>
@@ -198,8 +233,31 @@ export default function Analytics() {
               </div>
             ))}
           </div>
+          <Pager page={pairs.page} pageSize={PAIR_PAGE} total={pairs.total}
+            onGo={loadPairs} />
         </Section>
       )}
+    </div>
+  );
+}
+
+function Pager({ page, pageSize, total, onGo }: {
+  page: number; pageSize: number; total: number; onGo: (page: number) => void;
+}) {
+  const { t } = useTranslation();
+  const pages = Math.ceil(total / pageSize);
+  if (pages <= 1) return null;
+  return (
+    <div className="flex items-center justify-center gap-3 mt-2 text-sm">
+      <button disabled={page === 0} onClick={() => onGo(page - 1)}
+        className="px-4 py-1 rounded-lg bg-islamic-teal text-white disabled:opacity-30">
+        {t("prev")}
+      </button>
+      <span className="text-xs text-gray-500">{page + 1} / {pages.toLocaleString("en")}</span>
+      <button disabled={page + 1 >= pages} onClick={() => onGo(page + 1)}
+        className="px-4 py-1 rounded-lg bg-islamic-teal text-white disabled:opacity-30">
+        {t("next")}
+      </button>
     </div>
   );
 }

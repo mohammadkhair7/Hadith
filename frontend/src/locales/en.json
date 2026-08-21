@@ -130,6 +130,7 @@
   "show_original": "Original text",
   "confirm": "Confirm",
   "cancel": "Cancel",
+  "search_tab_texts": "Text search",
   "admin_tab_narrators": "Narrator management",
   "admin_tab_status": "System status",
   "admin_tab_embeddings": "Embeddings",

@@ -29,6 +29,8 @@ def search_narrators(search: str, limit: int = 20):
     return rows
 
 
+_DIR_CACHE: dict = {}
+
 _SORTS = {
     "mentions": "mentions DESC",
     "chains": "chains DESC",
@@ -119,8 +121,17 @@ def narrators_directory(
 
     cond = " AND ".join(where)
     order_by = _SORTS.get(sort, _SORTS["mentions"])
-    args["limit"] = min(limit, 100)
+    args["limit"] = min(limit, 1000)
     args["offset"] = max(offset, 0)
+
+    # unfiltered pages are what everyone lands on — cache them (1h)
+    cache_key = None
+    if cond == "true":
+        import time
+        cache_key = f"dir:{sort}:{args['limit']}:{args['offset']}"
+        hit = _DIR_CACHE.get(cache_key)
+        if hit and hit[0] > time.time() - 3600:
+            return hit[1]
 
     with db() as conn:
         base = f"""
@@ -132,23 +143,40 @@ def narrators_directory(
             ) s USING (narrator_id)
             WHERE {cond}"""
         total = q1(conn, f"SELECT count(*) AS n {base}", args)["n"]
+        # books counted once per page in a single grouped join (a correlated
+        # per-row subquery would run 1000x on large pages)
         rows = q(conn, f"""
-            SELECT n.narrator_id, n.canonical_ar, n.generation, n.death_year_h,
-                   n.meta->>'rijal_grade'  AS rijal_grade,
-                   n.meta->>'tabaqa_label' AS tabaqa_label,
-                   n.meta->'places'        AS places,
-                   coalesce(s.mentions, 0) AS mentions,
-                   coalesce(s.chains, 0)   AS chains,
-                   (SELECT count(DISTINCT p.edition_id)
-                    FROM isnad_links l
-                    JOIN isnad_chains c USING (chain_id)
-                    JOIN passages p ON p.passage_id=c.passage_id
-                    WHERE l.narrator_id=n.narrator_id) AS books
-            {base}
-            ORDER BY {order_by}, n.narrator_id
-            LIMIT %(limit)s OFFSET %(offset)s
+            WITH page AS (
+                SELECT n.narrator_id, n.canonical_ar, n.generation, n.death_year_h,
+                       n.meta->>'rijal_grade'  AS rijal_grade,
+                       n.meta->>'tabaqa_label' AS tabaqa_label,
+                       n.meta->'places'        AS places,
+                       coalesce(s.mentions, 0) AS mentions,
+                       coalesce(s.chains, 0)   AS chains,
+                       row_number() OVER (ORDER BY {order_by}, n.narrator_id) AS rn
+                {base}
+                ORDER BY {order_by}, n.narrator_id
+                LIMIT %(limit)s OFFSET %(offset)s
+            )
+            SELECT pg.*, coalesce(b.books, 0) AS books
+            FROM page pg
+            LEFT JOIN (
+                SELECT l.narrator_id, count(DISTINCT ps.edition_id) AS books
+                FROM isnad_links l
+                JOIN isnad_chains c USING (chain_id)
+                JOIN passages ps ON ps.passage_id = c.passage_id
+                WHERE l.narrator_id IN (SELECT narrator_id FROM page)
+                GROUP BY 1
+            ) b USING (narrator_id)
+            ORDER BY pg.rn
         """, args)
-    return {"total": total, "items": rows}
+        for r in rows:
+            r.pop("rn", None)
+    result = {"total": total, "items": rows}
+    if cache_key:
+        import time
+        _DIR_CACHE[cache_key] = (time.time(), result)
+    return result
 
 
 _FACETS_CACHE: dict = {}

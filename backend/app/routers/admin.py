@@ -38,6 +38,12 @@ def status(user: dict = Depends(admin_user)):
 
 # --- Narrator Management (merge / create / delete / relations) --------------
 
+def _invalidate_narrator_caches() -> None:
+    from .narrators import _DIR_CACHE, _FACETS_CACHE
+    _DIR_CACHE.clear()
+    _FACETS_CACHE.clear()
+
+
 class MergeBody(BaseModel):
     target_id: int
     source_ids: list[int]
@@ -48,9 +54,11 @@ def merge_narrators(body: MergeBody, user: dict = Depends(admin_user)):
     from ..services.narrator_admin import merge_narrators as do_merge
     with db() as conn:
         try:
-            return do_merge(conn, body.target_id, body.source_ids, user["email"])
+            result = do_merge(conn, body.target_id, body.source_ids, user["email"])
         except ValueError as e:
             raise HTTPException(400, str(e))
+    _invalidate_narrator_caches()
+    return result
 
 
 class CreateNarratorBody(BaseModel):
@@ -70,6 +78,7 @@ def create_narrator(body: CreateNarratorBody, user: dict = Depends(admin_user)):
             nid = do_create(conn, body.model_dump(), user["email"])
         except ValueError as e:
             raise HTTPException(400, str(e))
+    _invalidate_narrator_caches()
     return {"narrator_id": nid}
 
 
@@ -78,9 +87,11 @@ def delete_narrator(narrator_id: int, user: dict = Depends(admin_user)):
     from ..services.narrator_admin import delete_narrator as do_delete
     with db() as conn:
         try:
-            return do_delete(conn, narrator_id, user["email"])
+            result = do_delete(conn, narrator_id, user["email"])
         except ValueError as e:
             raise HTTPException(404, str(e))
+    _invalidate_narrator_caches()
+    return result
 
 
 class RelationBody(BaseModel):

@@ -30,12 +30,12 @@ def warm_cache() -> None:
     """Prime the heavy corpus-wide aggregations (called from startup)."""
     overview()
     grades(None)
-    top_narrators(25)
-    top_narrators(20)
-    top_pairs(25)
-    top_pairs(20)
+    top_narrators(1000, 0)
+    top_pairs(100, 0)
     chain_lengths()
     transmission_verbs(None)
+    from .narrators import narrators_directory
+    narrators_directory(limit=1000, offset=0)   # default research-directory page
 
 
 @router.get("/overview")
@@ -98,12 +98,19 @@ def _grades(edition_id: int | None):
 
 
 @router.get("/top-narrators")
-def top_narrators(limit: int = 25):
-    return _cached(f"top-narrators:{limit}", lambda: _top_narrators(limit))
+def top_narrators(limit: int = 25, offset: int = 0):
+    """Full listing via limit/offset paging (each page cached); the UI pages
+    1000 at a time with a scrollable panel."""
+    return _cached(f"top-narrators:{limit}:{offset}",
+                   lambda: _top_narrators(limit, offset))
 
 
-def _top_narrators(limit: int):
+def _top_narrators(limit: int, offset: int):
     with db() as conn:
+        total = _cached("top-narrators:total", lambda: q1(conn, """
+            SELECT count(DISTINCT narrator_id) AS n
+            FROM isnad_links WHERE narrator_id IS NOT NULL
+        """)["n"])
         rows = q(conn, """
             SELECT n.narrator_id, n.canonical_ar, n.generation, n.death_year_h,
                    count(*)                        AS mentions,
@@ -114,18 +121,31 @@ def _top_narrators(limit: int):
             JOIN isnad_chains c USING (chain_id)
             JOIN passages p ON p.passage_id = c.passage_id
             GROUP BY 1, 2, 3, 4
-            ORDER BY mentions DESC LIMIT %s
-        """, (min(limit, 100),))
-    return rows
+            ORDER BY mentions DESC, n.narrator_id
+            LIMIT %s OFFSET %s
+        """, (min(limit, 1000), max(offset, 0)))
+    return {"total": total, "items": rows}
 
 
 @router.get("/top-pairs")
-def top_pairs(limit: int = 25):
-    return _cached(f"top-pairs:{limit}", lambda: _top_pairs(limit))
+def top_pairs(limit: int = 25, offset: int = 0):
+    """Unlimited listing via limit/offset paging (each page cached)."""
+    return _cached(f"top-pairs:{limit}:{offset}",
+                   lambda: _top_pairs(limit, offset))
 
 
-def _top_pairs(limit: int):
+def _top_pairs(limit: int, offset: int):
     with db() as conn:
+        total = _cached("top-pairs:total", lambda: q1(conn, """
+            SELECT count(*) AS n FROM (
+                SELECT a.narrator_id, b.narrator_id
+                FROM isnad_links a
+                JOIN isnad_links b ON b.chain_id = a.chain_id AND b.pos = a.pos + 1
+                WHERE a.narrator_id IS NOT NULL AND b.narrator_id IS NOT NULL
+                  AND a.narrator_id != b.narrator_id
+                GROUP BY 1, 2
+            ) x
+        """)["n"])
         rows = q(conn, """
             SELECT sn.narrator_id AS student_id, sn.canonical_ar AS student,
                    tn.narrator_id AS teacher_id, tn.canonical_ar AS teacher,
@@ -136,9 +156,10 @@ def _top_pairs(limit: int):
             JOIN narrators tn ON tn.narrator_id = b.narrator_id
             WHERE a.narrator_id != b.narrator_id
             GROUP BY 1, 2, 3, 4
-            ORDER BY weight DESC LIMIT %s
-        """, (min(limit, 100),))
-    return rows
+            ORDER BY weight DESC, student_id, teacher_id
+            LIMIT %s OFFSET %s
+        """, (min(limit, 200), max(offset, 0)))
+    return {"total": total, "items": rows}
 
 
 @router.get("/chain-lengths")
