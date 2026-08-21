@@ -17,6 +17,7 @@ def keyword_search(
     subject_id: int | None = None,
     transmission: str | None = None,
     hadith_type: str | None = None,
+    grade: str | None = None,
     limit: int = 20,
     offset: int = 0,
 ) -> dict[str, Any]:
@@ -62,6 +63,12 @@ def keyword_search(
             "AND ht.type_norm = %(htype)s)"
         )
         params["htype"] = hadith_type
+    if grade:
+        where.append(
+            "EXISTS (SELECT 1 FROM hadith_grades g WHERE g.passage_id = p.passage_id "
+            "AND g.grade_norm = %(grade)s)"
+        )
+        params["grade"] = grade
 
     where_sql = " AND ".join(where)
     total = conn.execute(

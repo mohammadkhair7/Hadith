@@ -13,6 +13,13 @@ _cache: dict = {"at": 0.0, "data": None}
 _TTL = 3600
 
 
+GRADE_LABELS = {
+    "sahih": "صحيح", "hasan_sahih": "حسن صحيح", "hasan": "حسن",
+    "gharib": "غريب", "daif": "ضعيف", "maqbul": "مقبول",
+    "mawdu": "موضوع", "other": "أخرى",
+}
+
+
 @router.get("/classify/taxonomy")
 def taxonomy():
     now = time.time()
@@ -26,14 +33,21 @@ def taxonomy():
         type_counts = {r["type_norm"]: r["n"] for r in q(conn, """
             SELECT type_norm, count(*) AS n FROM hadith_types GROUP BY type_norm
         """)}
+        grade_counts = {r["grade_norm"]: r["n"] for r in q(conn, """
+            SELECT grade_norm, count(*) AS n FROM hadith_grades GROUP BY grade_norm
+        """)}
 
     tclasses = []
     for key, d in TRANSMISSION_CLASSES.items():
-        n = sum(c for v, c in verb_counts.items() if transmission_class(v) == key)
-        tclasses.append({"key": key, "ar": d["ar"], "verbs": d["verbs"], "chains": n})
+        verbs = [{"verb": v, "chains": verb_counts.get(v, 0)} for v in d["verbs"]]
+        tclasses.append({"key": key, "ar": d["ar"],
+                         "verbs": verbs,
+                         "chains": sum(v["chains"] for v in verbs)})
     types = [{"key": k, "ar": ar, "passages": type_counts.get(k, 0)}
              for k, ar in HADITH_TYPES.items()]
+    grades = [{"key": k, "ar": GRADE_LABELS.get(k, k), "passages": n}
+              for k, n in sorted(grade_counts.items(), key=lambda kv: -kv[1])]
 
-    data = {"transmission": tclasses, "hadith_types": types}
+    data = {"transmission": tclasses, "hadith_types": types, "grades": grades}
     _cache.update(at=now, data=data)
     return data

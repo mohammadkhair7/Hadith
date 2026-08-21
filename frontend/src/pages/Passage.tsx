@@ -93,7 +93,8 @@ export default function Passage() {
         </div>
 
         {useHadithText ? (
-          <HadithText raw={raw} diac={p.text_diac} sanadEndRaw={dbBoundary} prefs={prefs} />
+          <HadithText raw={raw} diac={p.text_diac} sanadEndRaw={dbBoundary}
+            spans={p.structure_spans} prefs={prefs} />
         ) : (
           <div className="arabic-text legacy-content"
             dangerouslySetInnerHTML={{

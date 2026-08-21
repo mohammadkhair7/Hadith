@@ -51,7 +51,9 @@ export default function Reader() {
   }
 
   const raw = passage?.text_raw || "";
-  const dbBoundary = isnad[0]?.sanad_end_raw > 0 ? isnad[0].sanad_end_raw : 0;
+  const dbBoundary = passage?.sanad_end_raw > 0
+    ? passage.sanad_end_raw
+    : isnad[0]?.sanad_end_raw > 0 ? isnad[0].sanad_end_raw : 0;
   const hasChains = passage
     ? dbBoundary > 0 || matnStart(raw) > 0 || segmentHadiths(raw).length > 0
     : false;
@@ -106,7 +108,8 @@ export default function Reader() {
               <div className="max-h-[68vh] overflow-y-auto toc-scroll pe-2 break-words">
                 {useHadithText ? (
                   <HadithText raw={raw} diac={passage.text_diac}
-                    sanadEndRaw={dbBoundary} prefs={prefs} />
+                    sanadEndRaw={dbBoundary} spans={passage.structure_spans}
+                    prefs={prefs} />
                 ) : (
                   <div className="arabic-text legacy-content"
                     dangerouslySetInnerHTML={{

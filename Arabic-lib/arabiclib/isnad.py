@@ -97,23 +97,26 @@ def _speech_boundary(norm: str) -> int | None:
 
 
 def parse_isnad(text: str, ner_entities: list[dict] | None = None) -> IsnadParse:
-    """Rule-based isnad parse of a hadith unit. Boundary priority:
-    strong Prophet-speech marker > generic speech opener > length cutoff.
+    """Rule-based isnad parse of a hadith unit. The boundary is the EARLIEST
+    valid marker: a «قال/قالت :» speech opener that is not a nested chain can
+    precede a strong Prophet marker («عن أبيه قال : لم أتخلف عن النبي ﷺ...» —
+    the matn starts at قال, and the later عن النبي is part of the matn).
+    Marker strength affects confidence, never position.
     Mentions never disappear silently: rejections are recorded in flags."""
     norm, idx_map = _normalize_with_map(text)
     flags: list[str] = []
 
     m = _MATN_START.search(norm)
-    if m:
+    sp = _speech_boundary(norm)
+    if m is not None and (sp is None or m.start() <= sp):
         sanad_end = m.start()
-    else:
-        sp = _speech_boundary(norm)
-        if sp is not None:
-            sanad_end = sp
+    elif sp is not None:
+        sanad_end = sp
+        if m is None:
             flags.append("speech_boundary")     # weaker marker than a strong opener
-        else:
-            sanad_end = min(len(norm), 300)
-            flags.append("no_matn_marker")
+    else:
+        sanad_end = min(len(norm), 300)
+        flags.append("no_matn_marker")
     sanad_end_raw = idx_map[sanad_end] if sanad_end < len(idx_map) else -1
     if "no_matn_marker" in flags:
         sanad_end_raw = -1                      # a length cutoff is not a real boundary

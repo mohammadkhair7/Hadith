@@ -2,14 +2,19 @@
 structure. Word-level labeling with classes HNUM (hadith number), ISNAD,
 MATN, HEADING; ground truth auto-generated from the corpus (units with the
 rule-extractor's sanad/matn boundary + TOC headings) — "the corpus is the
-labeler".
+labeler". Training data comes from الجامع units (measured boundaries);
+`annotate` deploys the model on الشاملة pages, storing raw-offset structure
+spans in passage_annotations (layer='structure', engine='neural-indexing').
 
 CLI (GPU venv, run from AdvancedHadith/):
     Arabic-lib\\.venv-gpu\\Scripts\\python -m arabiclib.neural.indexing train --epochs 3
     Arabic-lib\\.venv-gpu\\Scripts\\python -m arabiclib.neural.indexing eval
     Arabic-lib\\.venv-gpu\\Scripts\\python -m arabiclib.neural.indexing infer --text "حدثنا ..."
+    Arabic-lib\\.venv-gpu\\Scripts\\python -m arabiclib.neural.indexing annotate --all-shamela
 """
 import argparse
+import json
+import os
 import re
 import sys
 import time
@@ -146,7 +151,7 @@ def train(args) -> None:
         if m["word_accuracy"] > best:
             best = m["word_accuracy"]
             save_ckpt(CKPT, model, {"char_vocab": cvocab.stoi, "tag_vocab": tvocab.stoi,
-                                    "metrics": m, "task": "indexing", "version": "0.1"})
+                                    "metrics": m, "task": "indexing", "version": "0.2"})
             print(f"  saved -> {CKPT}")
 
 
@@ -196,6 +201,140 @@ def infer(args) -> None:
     sys.stdout.buffer.write(("\n\n".join(out) + "\n").encode("utf-8"))
 
 
+@torch.no_grad()
+def page_spans(model, cvocab, tvocab, dev, text: str) -> list[list]:
+    """Word-tag a full page and merge contiguous same-label words into
+    [start, end, label] spans over RAW text offsets."""
+    words = _words_with_offsets(text)
+    if len(words) < 12:
+        return []
+    itos = {v: k for k, v in tvocab.stoi.items()}
+    spans: list[list] = []
+    for i in range(0, len(words), MAX_WORDS):
+        chunk = words[i:i + MAX_WORDS]
+        x = pad_words([encode_words([w for w, _ in chunk], cvocab)]).to(dev)
+        tags = model(x).argmax(-1)[0][:len(chunk)].tolist()
+        for (w, off), t in zip(chunk, tags):
+            label = itos.get(t, "?")
+            end = off + len(w)
+            if spans and spans[-1][2] == label:
+                spans[-1][1] = end
+            else:
+                spans.append([off, end, label])
+    return spans
+
+
+def _usable(spans: list[list]) -> bool:
+    """Only store structure when the page really contains hadith anatomy:
+    at least one ISNAD span and one MATN span of substance."""
+    isnad = sum(e - s for s, e, label in spans if label == "ISNAD")
+    matn = sum(e - s for s, e, label in spans if label == "MATN")
+    return isnad >= 30 and matn >= 40
+
+
+def _db_url() -> str:
+    url = os.environ.get("DATABASE_URL") or os.environ.get("LOCAL_PG_URL")
+    if url:
+        return url
+    root = Path(__file__).resolve().parents[3]
+    for env in (root / ".env.local", root / "backend" / ".env", root / ".env"):
+        if not env.exists():
+            continue
+        for line in env.read_text(encoding="utf-8-sig").splitlines():
+            if line.startswith(("DATABASE_URL=", "LOCAL_PG_URL=")):
+                return line.split("=", 1)[1].strip().strip('"')
+    raise SystemExit("no DATABASE_URL / LOCAL_PG_URL found")
+
+
+def _annotate_edition(conn, edition_id: int, model, cvocab, tvocab, dev,
+                      version: str, limit: int | None, resume: bool) -> tuple[int, int]:
+    sql = "SELECT p.passage_id, p.text_raw FROM passages p WHERE p.edition_id=%s"
+    params: list = [edition_id]
+    if resume:
+        sql += """ AND NOT EXISTS (
+            SELECT 1 FROM passage_annotations a
+            WHERE a.passage_id=p.passage_id AND a.layer='structure'
+              AND a.engine='neural-indexing' AND a.version=%s)"""
+        params.append(version)
+    sql += " ORDER BY p.seq"
+    if limit:
+        sql += " LIMIT %s"
+        params.append(limit)
+    rows = conn.execute(sql, params).fetchall()
+    t0 = time.time()
+    written = skipped = 0
+    for n, (pid, raw) in enumerate(rows, 1):
+        spans = page_spans(model, cvocab, tvocab, dev, raw or "")
+        if spans and _usable(spans):
+            conn.execute("""
+                DELETE FROM passage_annotations
+                WHERE passage_id=%s AND layer='structure'
+                  AND engine='neural-indexing' AND version <> %s
+            """, (pid, version))
+            conn.execute("""
+                INSERT INTO passage_annotations (passage_id, layer, engine, version, payload)
+                VALUES (%s, 'structure', 'neural-indexing', %s, %s)
+                ON CONFLICT (passage_id, layer, engine, version)
+                DO UPDATE SET payload = EXCLUDED.payload, created_at = now()
+            """, (pid, version, json.dumps({"spans": spans}, ensure_ascii=False)))
+            written += 1
+        else:
+            skipped += 1
+        if n % 500 == 0:
+            conn.commit()
+            print(f"  {n}/{len(rows)} written={written} skipped={skipped} "
+                  f"({time.time()-t0:.0f}s)", flush=True)
+    conn.commit()
+    print(f"edition {edition_id} done: written={written} skipped={skipped} "
+          f"in {time.time()-t0:.0f}s", flush=True)
+    return written, skipped
+
+
+def annotate(args) -> None:
+    import psycopg
+    ck = load_ckpt(CKPT)
+    version = ck.get("version", "0.1")
+    model, cvocab, tvocab = _load_model()
+    dev = device()
+    model.to(dev)
+    with psycopg.connect(_db_url()) as conn:
+        if not getattr(args, "all_shamela", False):
+            if not args.edition:
+                sys.exit("need --edition N or --all-shamela")
+            _annotate_edition(conn, args.edition, model, cvocab, tvocab, dev,
+                              version, args.limit, resume=False)
+            return
+        eds = conn.execute("""
+            SELECT edition_id, passage_count FROM editions
+            WHERE source='shamela' ORDER BY passage_count, edition_id
+        """).fetchall()
+        print(f"bulk: {len(eds)} shamela editions, device={dev}, model=v{version}",
+              flush=True)
+        tot_w = tot_s = 0
+        for i, (eid, count) in enumerate(eds, 1):
+            step = f"structure{version}_edition_{eid}"
+            done = conn.execute(
+                "SELECT 1 FROM etl_state WHERE step=%s AND status='done'", (step,)
+            ).fetchone()
+            if done:
+                print(f"[{i}/{len(eds)}] edition {eid} ({count} pages): ledger done, skip",
+                      flush=True)
+                continue
+            print(f"[{i}/{len(eds)}] edition {eid} ({count} pages)", flush=True)
+            w, s = _annotate_edition(conn, eid, model, cvocab, tvocab, dev,
+                                     version, None, resume=True)
+            tot_w += w
+            tot_s += s
+            conn.execute("""
+                INSERT INTO etl_state (step, status, detail)
+                VALUES (%s, 'done', %s)
+                ON CONFLICT (step) DO UPDATE SET status='done', detail=EXCLUDED.detail,
+                    updated_at=now()
+            """, (step, json.dumps({"written": w, "skipped": s})))
+            conn.commit()
+        print(f"bulk done: written={tot_w} skipped={tot_s}", flush=True)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Neural page-indexing model (§12.9-A)")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -209,8 +348,12 @@ def main() -> None:
     ip = sub.add_parser("infer")
     ip.add_argument("--text")
     ip.add_argument("--file")
+    an = sub.add_parser("annotate", help="store structure spans for shamela pages")
+    an.add_argument("--edition", type=int)
+    an.add_argument("--all-shamela", action="store_true", dest="all_shamela")
+    an.add_argument("--limit", type=int, default=None)
     args = ap.parse_args()
-    {"train": train, "eval": evaluate, "infer": infer}[args.cmd](args)
+    {"train": train, "eval": evaluate, "infer": infer, "annotate": annotate}[args.cmd](args)
 
 
 if __name__ == "__main__":

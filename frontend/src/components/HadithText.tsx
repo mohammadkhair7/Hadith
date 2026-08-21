@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cleanText, mapRawOffset, matnEnd, matnStart, segmentHadiths, stripTashkeel } from "../text";
 
@@ -14,10 +14,11 @@ type Prefs = { tashkeel: boolean; matnOnly: boolean };
  *    displayed instead of the bare text (offsets are remapped).
  *  - Clicking a sanad or a matn toggles a strong highlight on that part;
  *    "matn only" lists every matn in its own section. */
-export default function HadithText({ raw, diac, sanadEndRaw, prefs }: {
+export default function HadithText({ raw, diac, sanadEndRaw, spans, prefs }: {
   raw: string;
   diac?: string | null;
   sanadEndRaw?: number | null;
+  spans?: [number, number, string][] | null;   // neural structure (raw offsets)
   prefs: Prefs;
 }) {
   const [focus, setFocus] = useState("");
@@ -34,6 +35,14 @@ export default function HadithText({ raw, diac, sanadEndRaw, prefs }: {
         <HadithBlock text={text} boundary={b} end={matnEnd(text, b)} fmt={fmt}
           focusKey="0" focus={focus} toggle={toggle} matnOnly={prefs.matnOnly} />
       </div>
+    );
+  }
+
+  // neural structure spans (shamela pages): model-segmented isnad/matn regions
+  if (spans && spans.length > 0) {
+    return (
+      <SpanText text={text} spans={spans} usingDiac={usingDiac} fmt={fmt}
+        focus={focus} toggle={toggle} matnOnly={prefs.matnOnly} />
     );
   }
 
@@ -68,6 +77,75 @@ export default function HadithText({ raw, diac, sanadEndRaw, prefs }: {
       })}
     </div>
   );
+}
+
+/** Render neural structure spans: ISNAD gray / MATN gold / HNUM badge /
+ *  HEADING styled; unlabeled gaps stay plain. Offsets are raw-text based and
+ *  remapped when the diacritized rendering is shown. */
+function SpanText({ text, spans, usingDiac, fmt, focus, toggle, matnOnly }: {
+  text: string;
+  spans: [number, number, string][];
+  usingDiac: boolean;
+  fmt: (s: string) => string;
+  focus: string;
+  toggle: (key: string) => void;
+  matnOnly: boolean;
+}) {
+  const { t } = useTranslation();
+  const mapped = spans.map(([s, e, l]) => [
+    usingDiac ? mapRawOffset(text, s) : s,
+    usingDiac ? mapRawOffset(text, e) : e,
+    l,
+  ] as [number, number, string]);
+
+  if (matnOnly) {
+    const matns = mapped.filter(([, , l]) => l === "MATN")
+      .map(([s, e]) => fmt(text.slice(s, e)).trim()).filter(Boolean);
+    return (
+      <div className="arabic-text whitespace-pre-wrap space-y-2">
+        {matns.map((m, i) => <div key={i}>{m}</div>)}
+      </div>
+    );
+  }
+
+  const parts: React.ReactNode[] = [];
+  let cursor = 0;
+  mapped.forEach(([s, e, l], i) => {
+    if (s > cursor) parts.push(<span key={`g${i}`}>{fmt(text.slice(cursor, s))}</span>);
+    const seg = fmt(text.slice(Math.max(s, cursor), e));
+    cursor = Math.max(cursor, e);
+    if (l === "ISNAD") {
+      const k = `s${i}`;
+      parts.push(
+        <span key={k} onClick={() => toggle(k)} title={t("click_highlight_sanad")}
+          className={`cursor-pointer transition-colors ${focus === k
+            ? "bg-islamic-teal/20 text-deep-teal ring-2 ring-islamic-teal rounded px-0.5 box-decoration-clone"
+            : "text-gray-500"}`}>
+          {seg}
+        </span>);
+    } else if (l === "MATN") {
+      const k = `m${i}`;
+      parts.push(
+        <span key={k} onClick={() => toggle(k)} title={t("click_highlight_matn")}
+          className={`cursor-pointer transition-colors ${focus === k
+            ? "bg-islamic-gold/40 ring-2 ring-islamic-gold rounded px-0.5 box-decoration-clone"
+            : "bg-islamic-gold/15 rounded px-0.5 box-decoration-clone"}`}>
+          {seg}
+        </span>);
+    } else if (l === "HNUM") {
+      parts.push(
+        <span key={`n${i}`}
+          className="text-islamic-gold font-bold">{seg}</span>);
+    } else if (l === "HEADING") {
+      parts.push(
+        <span key={`h${i}`}
+          className="font-bold text-deep-teal">{seg}</span>);
+    } else {
+      parts.push(<span key={`p${i}`}>{seg}</span>);
+    }
+  });
+  if (cursor < text.length) parts.push(<span key="tail">{fmt(text.slice(cursor))}</span>);
+  return <div className="arabic-text whitespace-pre-wrap">{parts}</div>;
 }
 
 function HadithBlock({ text, boundary, end, fmt, focusKey, focus, toggle, matnOnly }: {
@@ -123,8 +201,10 @@ function HadithBlock({ text, boundary, end, fmt, focusKey, focus, toggle, matnOn
 
 const GRADE_COLORS: Record<string, string> = {
   sahih: "bg-emerald-600",
+  hasan_sahih: "bg-teal-600",
   hasan: "bg-blue-600",
   maqbul: "bg-cyan-600",
+  gharib: "bg-violet-500",
   daif: "bg-orange-500",
   mawdu: "bg-red-600",
   other: "bg-gray-500",

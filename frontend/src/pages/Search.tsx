@@ -17,6 +17,7 @@ export default function Search() {
   const [source, setSource] = useState("");
   const [transmission, setTransmission] = useState("");
   const [htype, setHtype] = useState("");
+  const [grade, setGrade] = useState("");
   const [taxonomy, setTaxonomy] = useState<any>(null);
   const [page, setPage] = useState(0);
   const [result, setResult] = useState<any>(null);
@@ -35,11 +36,12 @@ export default function Search() {
     if (source) sp.set("source", source);
     if (transmission) sp.set("transmission", transmission);
     if (htype) sp.set("hadith_type", htype);
+    if (grade) sp.set("grade", grade);
     api(`/search?${sp}`)
       .then(setResult)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [q, mode, source, transmission, htype, page]);
+  }, [q, mode, source, transmission, htype, grade, page]);
 
   const facetsActive = mode === "keyword" || mode === "exact";
 
@@ -76,9 +78,16 @@ export default function Search() {
               title={t("transmission_title") as string}>
               <option value="">{t("filter_any_transmission")}</option>
               {taxonomy.transmission.map((c: any) => (
-                <option key={c.key} value={c.key}>
-                  {c.ar} — {c.chains.toLocaleString("en")}
-                </option>
+                <optgroup key={c.key} label={`${c.ar} — ${c.chains.toLocaleString("en")}`}>
+                  <option value={c.key}>
+                    {t("filter_whole_class")} {c.ar}
+                  </option>
+                  {c.verbs.filter((v: any) => v.chains > 0).map((v: any) => (
+                    <option key={v.verb} value={v.verb}>
+                      {v.verb} — {v.chains.toLocaleString("en")}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
             <select value={htype}
@@ -89,6 +98,17 @@ export default function Search() {
               {taxonomy.hadith_types.map((c: any) => (
                 <option key={c.key} value={c.key}>
                   {c.ar} — {c.passages.toLocaleString("en")}
+                </option>
+              ))}
+            </select>
+            <select value={grade}
+              onChange={(e) => { setGrade(e.target.value); setPage(0); }}
+              className="border rounded-xl px-3 text-sm font-arabic"
+              title={t("grade_title") as string}>
+              <option value="">{t("filter_any_grade")}</option>
+              {(taxonomy.grades || []).map((g: any) => (
+                <option key={g.key} value={g.key}>
+                  {g.ar} — {g.passages.toLocaleString("en")}
                 </option>
               ))}
             </select>

@@ -50,11 +50,17 @@ function normWithMap(raw: string): { norm: string; map: number[] } {
   return { norm, map };
 }
 
+// a speech opener directly before a Prophet marker: the matn really starts
+// there («عن أبيه قال : لم أتخلف عن النبي ﷺ...» — قال opens the matn)
+const SPEECH_OPEN = /(قال|قالت)\s*:/g;
+
 /**
  * Heuristic matn boundary: index in the RAW string where the matn begins
  * (the FIRST valid Prophet-speech marker, mirroring the DB extractor).
  * Weak markers (عن النبي / أن رسول الله) are only accepted when followed by
  * a speech cue — a bare honorific mention in commentary is NOT a matn start.
+ * When a «قال :» speech opener directly precedes the marker (same sentence),
+ * the boundary is pulled back to it — the Prophet mention is INSIDE the matn.
  * Returns -1 when not found or when the remainder would be too short.
  */
 export function matnStart(raw: string): number {
@@ -73,6 +79,16 @@ export function matnStart(raw: string): number {
       best = m.index;
       break;
     }
+  }
+  if (best > 8) {
+    // look back for a «قال :» in the same sentence, at most ~50 chars before
+    const from = Math.max(8, best - 50);
+    const win = norm.slice(from, best);
+    let last = -1;
+    let sp: RegExpExecArray | null;
+    SPEECH_OPEN.lastIndex = 0;
+    while ((sp = SPEECH_OPEN.exec(win)) !== null) last = sp.index;
+    if (last >= 0 && !/[.؟!؛»]/.test(win.slice(last))) best = from + last;
   }
   if (best < 0 || norm.length - best < 25 || best === 0) return -1;
   return map[best];

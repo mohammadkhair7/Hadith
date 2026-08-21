@@ -129,6 +129,7 @@ def build_indexing(n_units: int, n_headings: int) -> None:
             SELECT p.passage_id, p.text_raw, c.sanad_end_raw
             FROM isnad_chains c JOIN passages p USING (passage_id)
             WHERE c.sanad_end_raw IS NOT NULL AND c.sanad_end_raw > 30
+              AND c.ord = 0 AND c.confidence >= 0.9
               AND length(p.text_raw) BETWEEN 150 AND 4000
             ORDER BY random() LIMIT %s
         """, (n_units,)).fetchall()

@@ -583,6 +583,27 @@ Chapter/topic categorization (the third dimension) was already served by the
 `subjects`/`subject_links` load from hadith.db (21,994 subjects, 1.14M links):
 subject tree browse, per-passage subject chips, and `subject_id=` search filter.
 
+Additions (2026-08-20, second pass):
+
+- **Grades (درجات) facet** — `grade=` search filter over `hadith_grades.grade_norm`.
+  hadith.db supplied only صحيح rows (15,078); `ops/extract_grades.py` additionally
+  extracts the classical in-book judgements from the matn text itself (الترمذي
+  «هذا حديث حسن صحيح», الحاكم «صحيح على شرط الشيخين» / «صحيح الإسناد ولم يخرجاه»,
+  «إسناده حسن/ضعيف»...) with `source='matn-text'` (existing rows are authoritative):
+  +7,876 rows → sahih/hasan_sahih/hasan/gharib/daif buckets.
+- **Transmission facet lists all 13 صيغ** — the taxonomy endpoint returns per-verb
+  chain counts inside each class; the search droplist offers the whole class or an
+  individual صيغة (the filter accepts either).
+- **Matn boundary fix + neural structure deployment** — the isnad extractor now takes
+  the EARLIEST valid boundary marker: a «قال :» speech opener directly before a
+  Prophet marker wins («عن أبيه قال : لم أتخلف عن النبي ﷺ...» — the matn starts at
+  قال). The neural page-indexing model (§12.9-A, word-level ISNAD/MATN/HNUM/HEADING)
+  is trained on الجامع units (rule boundaries, confidence ≥ 0.9, as ground truth) and
+  deployed on الشاملة pages via `arabiclib.neural.indexing annotate --all-shamela`,
+  storing raw-offset spans in `passage_annotations` (layer='structure',
+  engine='neural-indexing'); the reader renders these spans (multi-hadith pages get
+  per-hadith sanad/matn regions) with client heuristics as fallback only.
+
 ---
 
 ## 9. Narrator knowledge graph (رجال الحديث) — construction plan

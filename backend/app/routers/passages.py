@@ -58,6 +58,13 @@ def get_passage(passage_id: int, lang: str | None = None):
         """, (passage_id,))
         p["sanad_end_raw"] = boundary["sanad_end_raw"] if boundary else None
 
+        st = q1(conn, """
+            SELECT payload->'spans' AS spans FROM passage_annotations
+            WHERE passage_id=%s AND layer='structure' AND engine='neural-indexing'
+            LIMIT 1
+        """, (passage_id,))
+        p["structure_spans"] = st["spans"] if st else None
+
         p["grade"] = q1(conn, """
             SELECT grade_ar, grade_norm, source FROM hadith_grades WHERE passage_id=%s
         """, (passage_id,))
