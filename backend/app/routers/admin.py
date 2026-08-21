@@ -36,6 +36,134 @@ def status(user: dict = Depends(admin_user)):
             "embeddings": emb, "db_size": db_size["size"]}
 
 
+# --- Narrator Management (merge / create / delete / relations) --------------
+
+class MergeBody(BaseModel):
+    target_id: int
+    source_ids: list[int]
+
+
+@router.post("/narrators/merge")
+def merge_narrators(body: MergeBody, user: dict = Depends(admin_user)):
+    from ..services.narrator_admin import merge_narrators as do_merge
+    with db() as conn:
+        try:
+            return do_merge(conn, body.target_id, body.source_ids, user["email"])
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+
+
+class CreateNarratorBody(BaseModel):
+    canonical_ar: str
+    kunya: str | None = None
+    laqab: str | None = None
+    generation: str | None = None
+    death_year_h: int | None = None
+    bio_summary: str | None = None
+
+
+@router.post("/narrators")
+def create_narrator(body: CreateNarratorBody, user: dict = Depends(admin_user)):
+    from ..services.narrator_admin import create_narrator as do_create
+    with db() as conn:
+        try:
+            nid = do_create(conn, body.model_dump(), user["email"])
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+    return {"narrator_id": nid}
+
+
+@router.delete("/narrators/{narrator_id}")
+def delete_narrator(narrator_id: int, user: dict = Depends(admin_user)):
+    from ..services.narrator_admin import delete_narrator as do_delete
+    with db() as conn:
+        try:
+            return do_delete(conn, narrator_id, user["email"])
+        except ValueError as e:
+            raise HTTPException(404, str(e))
+
+
+class RelationBody(BaseModel):
+    student_id: int
+    teacher_id: int
+    action: str                 # add | remove (override on the derived graph)
+    weight: int = 1
+    note: str | None = None
+
+
+@router.get("/narrators/relations")
+def list_relations(user: dict = Depends(admin_user)):
+    from ..services.narrator_admin import ensure_tables
+    with db() as conn:
+        ensure_tables(conn)
+        return q(conn, """
+            SELECT m.edge_id, m.student_id, m.teacher_id, m.action, m.weight,
+                   m.note, m.created_by, m.created_at,
+                   sn.canonical_ar AS student_name, tn.canonical_ar AS teacher_name
+            FROM narrator_edges_manual m
+            JOIN narrators sn ON sn.narrator_id = m.student_id
+            JOIN narrators tn ON tn.narrator_id = m.teacher_id
+            ORDER BY m.created_at DESC LIMIT 200
+        """)
+
+
+@router.post("/narrators/relations")
+def add_relation(body: RelationBody, user: dict = Depends(admin_user)):
+    from ..services.narrator_admin import audit, ensure_tables
+    if body.action not in ("add", "remove"):
+        raise HTTPException(400, "action must be add or remove")
+    if body.student_id == body.teacher_id:
+        raise HTTPException(400, "student and teacher must differ")
+    with db() as conn:
+        ensure_tables(conn)
+        for nid in (body.student_id, body.teacher_id):
+            if not q1(conn, "SELECT 1 AS x FROM narrators WHERE narrator_id=%s", (nid,)):
+                raise HTTPException(404, f"narrator {nid} not found")
+        row = conn.execute("""
+            INSERT INTO narrator_edges_manual
+                (student_id, teacher_id, action, weight, note, created_by)
+            VALUES (%s,%s,%s,%s,%s,%s)
+            ON CONFLICT (student_id, teacher_id, action)
+            DO UPDATE SET weight=EXCLUDED.weight, note=EXCLUDED.note
+            RETURNING edge_id
+        """, (body.student_id, body.teacher_id, body.action,
+              max(body.weight, 1), body.note, user["email"])).fetchone()
+        audit(conn, "relation_" + body.action,
+              {"student_id": body.student_id, "teacher_id": body.teacher_id,
+               "note": body.note}, user["email"])
+        conn.commit()
+    return {"edge_id": row["edge_id"]}
+
+
+@router.delete("/narrators/relations/{edge_id}")
+def delete_relation(edge_id: int, user: dict = Depends(admin_user)):
+    from ..services.narrator_admin import audit, ensure_tables
+    with db() as conn:
+        ensure_tables(conn)
+        row = conn.execute("""
+            DELETE FROM narrator_edges_manual WHERE edge_id=%s
+            RETURNING student_id, teacher_id, action
+        """, (edge_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "override not found")
+        audit(conn, "relation_override_undo",
+              {"edge_id": edge_id, "student_id": row["student_id"],
+               "teacher_id": row["teacher_id"], "was": row["action"]}, user["email"])
+        conn.commit()
+    return {"deleted": edge_id}
+
+
+@router.get("/narrators/audit")
+def narrator_audit(limit: int = 50, user: dict = Depends(admin_user)):
+    from ..services.narrator_admin import ensure_tables
+    with db() as conn:
+        ensure_tables(conn)
+        return q(conn, """
+            SELECT audit_id, action, payload, admin_email, created_at
+            FROM admin_audit ORDER BY audit_id DESC LIMIT %s
+        """, (min(limit, 200),))
+
+
 # --- Book Embedding Management (§7.4) ---------------------------------------
 
 class EmbJobBody(BaseModel):

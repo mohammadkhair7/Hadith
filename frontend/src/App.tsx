@@ -13,6 +13,7 @@ import Timeline from "./pages/Timeline";
 import Login from "./pages/Login";
 import Account from "./pages/Account";
 import AdminStatus from "./pages/AdminStatus";
+import AdminNarrators from "./pages/AdminNarrators";
 import AdminEmbeddings from "./pages/AdminEmbeddings";
 import AdminTranslations from "./pages/AdminTranslations";
 
@@ -33,6 +34,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/account" element={<Account />} />
         <Route path="/admin" element={<AdminStatus />} />
+        <Route path="/admin/narrators" element={<AdminNarrators />} />
         <Route path="/admin/embeddings" element={<AdminEmbeddings />} />
         <Route path="/admin/translations" element={<AdminTranslations />} />
       </Route>

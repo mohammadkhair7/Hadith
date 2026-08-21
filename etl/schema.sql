@@ -297,6 +297,27 @@ CREATE TABLE IF NOT EXISTS hadith_types (
 );
 CREATE INDEX IF NOT EXISTS hadith_types_norm ON hadith_types (type_norm);
 
+-- manual narrator-graph curation (admin console). Overrides layered on the
+-- edges derived from isnad_links; the isnad data itself is never destroyed.
+CREATE TABLE IF NOT EXISTS narrator_edges_manual (
+    edge_id    bigserial PRIMARY KEY,
+    student_id int NOT NULL REFERENCES narrators(narrator_id) ON DELETE CASCADE,
+    teacher_id int NOT NULL REFERENCES narrators(narrator_id) ON DELETE CASCADE,
+    action     text NOT NULL CHECK (action IN ('add', 'remove')),
+    weight     int DEFAULT 1,
+    note       text,
+    created_by text,
+    created_at timestamptz DEFAULT now(),
+    UNIQUE (student_id, teacher_id, action)
+);
+CREATE TABLE IF NOT EXISTS admin_audit (
+    audit_id    bigserial PRIMARY KEY,
+    action      text NOT NULL,
+    payload     jsonb NOT NULL DEFAULT '{}'::jsonb,
+    admin_email text,
+    created_at  timestamptz DEFAULT now()
+);
+
 -- hadith origination timeline (ops/analyze_timeline.py; docs/HADITH_TIMELINE_ANALYSIS.md)
 -- year axis is hijri; negative years = before the hijra (بعثة = -13)
 CREATE TABLE IF NOT EXISTS timeline_events (

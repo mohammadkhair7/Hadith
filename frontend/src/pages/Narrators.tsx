@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api";
+import NarratorDirectory from "../components/NarratorDirectory";
 
 type GNode = {
   narrator_id: number; name: string; mentions: number;
@@ -387,6 +388,8 @@ export default function Narrators() {
           </aside>
         )}
       </div>
+
+      <NarratorDirectory onOpen={loadGraph} />
     </div>
   );
 }

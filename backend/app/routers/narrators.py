@@ -29,6 +29,167 @@ def search_narrators(search: str, limit: int = 20):
     return rows
 
 
+_SORTS = {
+    "mentions": "mentions DESC",
+    "chains": "chains DESC",
+    "death": "n.death_year_h ASC NULLS LAST",
+    "death_desc": "n.death_year_h DESC NULLS LAST",
+    "name": "n.canonical_ar ASC",
+    "id": "n.narrator_id ASC",
+}
+
+
+@router.get("/narrators/directory")
+def narrators_directory(
+        q_name: str | None = None, narrator_id: int | None = None,
+        generation: str | None = None, grade: str | None = None,
+        place: str | None = None,
+        death_from: int | None = None, death_to: int | None = None,
+        teacher: str | None = None, student: str | None = None,
+        edition_id: int | None = None, topic: str | None = None,
+        min_mentions: int = 0, sort: str = "mentions",
+        limit: int = 25, offset: int = 0):
+    """Research directory: list/filter/sort narrators on multiple criteria
+    (name, trustworthiness grade, death year, place, teacher/student, book,
+    hadith topic...)."""
+    where, args = ["true"], {}
+    if narrator_id:
+        where.append("n.narrator_id = %(nid)s")
+        args["nid"] = narrator_id
+    if q_name:
+        where.append("""(n.canonical_norm LIKE '%%' || %(qn)s || '%%'
+            OR EXISTS (SELECT 1 FROM narrator_aliases a
+                       WHERE a.narrator_id=n.narrator_id
+                         AND a.alias_norm LIKE '%%' || %(qn)s || '%%'))""")
+        args["qn"] = normalize_arabic(q_name)
+    if generation:
+        where.append("n.generation = %(gen)s")
+        args["gen"] = generation
+    if grade:
+        # stored grades are normalized Arabic (ثقه not ثقة)
+        where.append("n.meta->>'rijal_grade' LIKE '%%' || %(grade)s || '%%'")
+        args["grade"] = normalize_arabic(grade)
+    if place:
+        where.append("""EXISTS (SELECT 1 FROM jsonb_array_elements_text(
+            CASE WHEN jsonb_typeof(n.meta->'places')='array'
+                 THEN n.meta->'places' ELSE '[]'::jsonb END) pl
+            WHERE pl LIKE '%%' || %(place)s || '%%')""")
+        args["place"] = place
+    if death_from is not None:
+        where.append("n.death_year_h >= %(dfrom)s")
+        args["dfrom"] = death_from
+    if death_to is not None:
+        where.append("n.death_year_h <= %(dto)s")
+        args["dto"] = death_to
+    if teacher:
+        where.append("""EXISTS (
+            SELECT 1 FROM isnad_links a
+            JOIN isnad_links b ON b.chain_id=a.chain_id AND b.pos=a.pos+1
+            JOIN narrators tn ON tn.narrator_id=b.narrator_id
+            WHERE a.narrator_id=n.narrator_id
+              AND tn.canonical_norm LIKE '%%' || %(teacher)s || '%%')""")
+        args["teacher"] = normalize_arabic(teacher)
+    if student:
+        where.append("""EXISTS (
+            SELECT 1 FROM isnad_links b
+            JOIN isnad_links a ON a.chain_id=b.chain_id AND a.pos=b.pos-1
+            JOIN narrators sn ON sn.narrator_id=a.narrator_id
+            WHERE b.narrator_id=n.narrator_id
+              AND sn.canonical_norm LIKE '%%' || %(student)s || '%%')""")
+        args["student"] = normalize_arabic(student)
+    if edition_id:
+        where.append("""EXISTS (
+            SELECT 1 FROM isnad_links l
+            JOIN isnad_chains c USING (chain_id)
+            JOIN passages p ON p.passage_id=c.passage_id
+            WHERE l.narrator_id=n.narrator_id AND p.edition_id=%(ed)s)""")
+        args["ed"] = edition_id
+    if topic:
+        where.append("""EXISTS (
+            SELECT 1 FROM isnad_links l
+            JOIN isnad_chains c USING (chain_id)
+            JOIN subject_links sl ON sl.passage_id=c.passage_id
+            JOIN subjects sj ON sj.subject_id=sl.subject_id
+            WHERE l.narrator_id=n.narrator_id
+              AND sj.title_norm LIKE '%%' || %(topic)s || '%%')""")
+        args["topic"] = normalize_arabic(topic)
+    if min_mentions > 0:
+        where.append("coalesce(s.mentions, 0) >= %(minm)s")
+        args["minm"] = min_mentions
+
+    cond = " AND ".join(where)
+    order_by = _SORTS.get(sort, _SORTS["mentions"])
+    args["limit"] = min(limit, 100)
+    args["offset"] = max(offset, 0)
+
+    with db() as conn:
+        base = f"""
+            FROM narrators n
+            LEFT JOIN (
+                SELECT narrator_id, count(*) AS mentions,
+                       count(DISTINCT chain_id) AS chains
+                FROM isnad_links WHERE narrator_id IS NOT NULL GROUP BY 1
+            ) s USING (narrator_id)
+            WHERE {cond}"""
+        total = q1(conn, f"SELECT count(*) AS n {base}", args)["n"]
+        rows = q(conn, f"""
+            SELECT n.narrator_id, n.canonical_ar, n.generation, n.death_year_h,
+                   n.meta->>'rijal_grade'  AS rijal_grade,
+                   n.meta->>'tabaqa_label' AS tabaqa_label,
+                   n.meta->'places'        AS places,
+                   coalesce(s.mentions, 0) AS mentions,
+                   coalesce(s.chains, 0)   AS chains,
+                   (SELECT count(DISTINCT p.edition_id)
+                    FROM isnad_links l
+                    JOIN isnad_chains c USING (chain_id)
+                    JOIN passages p ON p.passage_id=c.passage_id
+                    WHERE l.narrator_id=n.narrator_id) AS books
+            {base}
+            ORDER BY {order_by}, n.narrator_id
+            LIMIT %(limit)s OFFSET %(offset)s
+        """, args)
+    return {"total": total, "items": rows}
+
+
+_FACETS_CACHE: dict = {}
+
+
+@router.get("/narrators/directory/facets")
+def directory_facets():
+    import time
+    if _FACETS_CACHE.get("at", 0) > time.time() - 3600:
+        return _FACETS_CACHE["data"]
+    with db() as conn:
+        gens = q(conn, """
+            SELECT generation, count(*) AS n FROM narrators
+            WHERE generation IS NOT NULL GROUP BY 1 ORDER BY n DESC
+        """)
+        grades = q(conn, """
+            SELECT meta->>'rijal_grade' AS grade, count(*) AS n FROM narrators
+            WHERE meta->>'rijal_grade' IS NOT NULL
+            GROUP BY 1 ORDER BY n DESC LIMIT 20
+        """)
+        places = q(conn, """
+            SELECT pl AS place, count(*) AS n
+            FROM narrators n,
+                 jsonb_array_elements_text(
+                     CASE WHEN jsonb_typeof(n.meta->'places')='array'
+                          THEN n.meta->'places' ELSE '[]'::jsonb END) pl
+            GROUP BY 1 ORDER BY n DESC LIMIT 30
+        """)
+        books = q(conn, """
+            SELECT e.edition_id, w.title_ar FROM editions e
+            JOIN works w USING (work_id)
+            WHERE EXISTS (SELECT 1 FROM passages p
+                          JOIN isnad_chains c ON c.passage_id = p.passage_id
+                          WHERE p.edition_id = e.edition_id)
+            ORDER BY w.title_ar
+        """)
+    data = {"generations": gens, "grades": grades, "places": places, "books": books}
+    _FACETS_CACHE.update({"at": time.time(), "data": data})
+    return data
+
+
 @router.get("/narrators/{narrator_id}")
 def get_narrator(narrator_id: int):
     with db() as conn:
@@ -104,16 +265,39 @@ def pair_hadiths(student_id: int, teacher_id: int, limit: int = 50, offset: int 
 
 
 def _neighbors(conn, ids: list[int], cap: int):
-    """Aggregated NARRATED_FROM edges touching the given narrator set."""
+    """Aggregated NARRATED_FROM edges touching the given narrator set,
+    with admin manual overrides applied (added edges join in, removed
+    edges are hidden)."""
+    from ..services.narrator_admin import ensure_tables
+    ensure_tables(conn)
     return q(conn, """
-        SELECT a.narrator_id AS student, b.narrator_id AS teacher, count(*) AS weight
-        FROM isnad_links a
-        JOIN isnad_links b ON b.chain_id = a.chain_id AND b.pos = a.pos + 1
-        WHERE (a.narrator_id = ANY(%s) OR b.narrator_id = ANY(%s))
-          AND a.narrator_id IS NOT NULL AND b.narrator_id IS NOT NULL
-          AND a.narrator_id != b.narrator_id
-        GROUP BY 1, 2 ORDER BY weight DESC LIMIT %s
-    """, (ids, ids, cap))
+        WITH derived AS (
+            SELECT a.narrator_id AS student, b.narrator_id AS teacher,
+                   count(*) AS weight
+            FROM isnad_links a
+            JOIN isnad_links b ON b.chain_id = a.chain_id AND b.pos = a.pos + 1
+            WHERE (a.narrator_id = ANY(%s) OR b.narrator_id = ANY(%s))
+              AND a.narrator_id IS NOT NULL AND b.narrator_id IS NOT NULL
+              AND a.narrator_id != b.narrator_id
+            GROUP BY 1, 2
+        ), manual_add AS (
+            SELECT student_id AS student, teacher_id AS teacher,
+                   greatest(coalesce(weight, 1), 1)::bigint AS weight
+            FROM narrator_edges_manual
+            WHERE action = 'add'
+              AND (student_id = ANY(%s) OR teacher_id = ANY(%s))
+        ), combined AS (
+            SELECT student, teacher, sum(weight)::bigint AS weight
+            FROM (SELECT * FROM derived UNION ALL SELECT * FROM manual_add) u
+            GROUP BY 1, 2
+        )
+        SELECT c.student, c.teacher, c.weight FROM combined c
+        WHERE NOT EXISTS (SELECT 1 FROM narrator_edges_manual r
+                          WHERE r.action = 'remove'
+                            AND r.student_id = c.student
+                            AND r.teacher_id = c.teacher)
+        ORDER BY c.weight DESC LIMIT %s
+    """, (ids, ids, ids, ids, cap))
 
 
 def _node_details(conn, ids: list[int]):

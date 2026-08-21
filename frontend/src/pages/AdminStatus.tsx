@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { api, isLoggedIn } from "../api";
+import AdminTabs from "../components/AdminTabs";
 
 export default function AdminStatus() {
   const { t } = useTranslation();
@@ -19,17 +20,8 @@ export default function AdminStatus() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="flex items-center gap-4 mb-6">
-        <h1 className="text-2xl font-bold">{t("admin_status")}</h1>
-        <Link to="/admin/embeddings"
-          className="text-sm bg-islamic-gold text-deep-teal rounded-lg px-4 py-1.5 font-bold hover:bg-orange-accent transition-colors">
-          Embedding Management
-        </Link>
-        <Link to="/admin/translations"
-          className="text-sm bg-islamic-teal text-white rounded-lg px-4 py-1.5 font-bold hover:bg-deep-teal transition-colors">
-          Translation Management
-        </Link>
-      </div>
+      <h1 className="text-2xl font-bold mb-4">{t("admin_status")}</h1>
+      <AdminTabs />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
         {Object.entries(s.counts || {}).map(([k, v]: any) => (

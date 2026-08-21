@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, isLoggedIn } from "../api";
+import AdminTabs from "../components/AdminTabs";
 
 export default function AdminTranslations() {
   const nav = useNavigate();
@@ -70,6 +71,7 @@ export default function AdminTranslations() {
   return (
     <div className="max-w-6xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Translation Management — English</h1>
+      <AdminTabs />
       {error && <div className="bg-red-50 text-red-600 rounded-lg p-3 mb-4 text-sm">{error}</div>}
 
       <div className="flex items-center gap-3 mb-4 bg-white rounded-xl shadow p-4 flex-wrap" dir="ltr">
