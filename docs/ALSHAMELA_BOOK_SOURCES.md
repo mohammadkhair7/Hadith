@@ -247,6 +247,10 @@ computed from aljam3 `unit` passages, so loading page-archive editions does
 not disturb them; the search index, reader, and compare views gain the
 new content.
 
+> **Operational playbook:** the exact commands for every step below (local +
+> Railway), as validated on the صحيح مسلم pilot, live in
+> [`ALSHAMELA_BOOK_PIPELINE.md`](./ALSHAMELA_BOOK_PIPELINE.md).
+
 ## 5A. Unitization & crosswalk — detailed per-book guideline (steps 12–14)
 
 These steps run **for every imported book, immediately after the TOC step**,
@@ -288,6 +292,14 @@ report is reviewed before the remaining 48 books are batch-processed.
     hadith_seq, method, confidence)`. The crosswalk is the permanent
     traceability record (§8.2): aljam3 hadith → Shamela unit → printed
     جزء/صفحة.
+    **Redundancy rule:** crosswalk-matched units are the *same hadith* as
+    their aljam3 twin and are never re-mined for narrators or chains;
+    unmatched units are checked against the same work by text overlap and
+    against the global corpus for near-duplicates before ever being treated
+    as new content, and narrator mentions resolve via `narrator_aliases`
+    first with new-narrator candidates going through Admin review — nothing
+    is added to the knowledge base blindly (full policy: the two redundancy
+    gates in `ALSHAMELA_BOOK_PIPELINE.md`).
 14. **Validate** — the script prints a per-book report which must be reviewed
     before the book is considered done:
     - units found vs aljam3 unit count, printed-number coverage and duplicates;
