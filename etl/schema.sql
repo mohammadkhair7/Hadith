@@ -343,3 +343,38 @@ CREATE INDEX IF NOT EXISTS hadith_dates_year ON hadith_dates (year_best);
 CREATE INDEX IF NOT EXISTS hadith_dates_event ON hadith_dates (event_key);
 CREATE INDEX IF NOT EXISTS hadith_dates_season ON hadith_dates (season);
 CREATE INDEX IF NOT EXISTS hadith_dates_companion ON hadith_dates (companion_key);
+
+-- ----------------------------------------------------------------------------
+-- shamela unitization: hadith-level identifiers over page-archive editions
+-- (ops/unitize_shamela.py). Global unit id = 'S<bkid>:<hadith_seq>'.
+-- Rebuilt deterministically per environment; never copied by serial id.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS shamela_units (
+    unit_id          bigserial PRIMARY KEY,
+    edition_id       int NOT NULL REFERENCES editions ON DELETE CASCADE,
+    bkid             int NOT NULL,             -- shamela source_book_id (stable)
+    hadith_seq       int NOT NULL,             -- unique per book, reading order
+    hadith_num       text,                     -- printed number (may repeat/miss)
+    start_passage_id bigint NOT NULL REFERENCES passages ON DELETE CASCADE,
+    end_passage_id   bigint NOT NULL REFERENCES passages ON DELETE CASCADE,
+    start_off        int NOT NULL,             -- raw-text offset on start page
+    end_off          int NOT NULL,             -- raw-text offset on end page
+    sanad_end_off    int,                      -- neural structure boundary (raw)
+    meta             jsonb NOT NULL DEFAULT '{}'::jsonb,
+    UNIQUE (edition_id, hadith_seq)
+);
+CREATE INDEX IF NOT EXISTS shamela_units_num  ON shamela_units (edition_id, hadith_num);
+CREATE INDEX IF NOT EXISTS shamela_units_page ON shamela_units (start_passage_id);
+
+-- crosswalk: aljam3 hadith unit -> shamela unit (permanent traceability)
+CREATE TABLE IF NOT EXISTS unit_map (
+    aljam3_passage_id bigint PRIMARY KEY REFERENCES passages ON DELETE CASCADE,
+    unit_id           bigint REFERENCES shamela_units ON DELETE SET NULL,
+    bkid              int NOT NULL,
+    hadith_seq        int NOT NULL,
+    hadith_num        text,
+    method            text NOT NULL,           -- hnum+overlap | hnum | manual
+    confidence        real,
+    matched_at        timestamptz DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS unit_map_unit ON unit_map (unit_id);

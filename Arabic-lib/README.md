@@ -66,3 +66,18 @@ pipeline on Bukhari flat pages (shamela) against the native sunna index.
 
 `arabiclib.isnad.parse_isnad(text)` locates the sanad/matn boundary and parses
 transmission hops (verb + name mention) — the input to the Phase 6 KG builder.
+
+
+## TASHKEEL NOTES:
+# tashkeel done and pushed to production (230,689 annotation rows) for alshamela books
+
+
+## NOTES:
+Indexing model v0.2 training completed successfully — and dramatically faster with the GPU to itself (~18 minutes for all 3 epochs, versus the 13+ hours it was projecting while sharing the GPU with the tashkeel job).
+
+Final evaluation on the held-out test set (174,404 tokens, 2,033 boundaries):
+
+Word accuracy: 99.96%
+Matn boundary within ±2 words: 99.75%
+Boundary median error: 0 words
+The model is saved to Arabic-lib\models\indexing_wordtagger.pt and is ready to serve sanad/matn boundary detection. All background GPU work is now finished — nothing left running.

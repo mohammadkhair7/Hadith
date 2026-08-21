@@ -247,6 +247,63 @@ computed from aljam3 `unit` passages, so loading page-archive editions does
 not disturb them; the search index, reader, and compare views gain the
 new content.
 
+## 5A. Unitization & crosswalk — detailed per-book guideline (steps 12–14)
+
+These steps run **for every imported book, immediately after the TOC step**,
+so that each Shamela book carries hadith-level identifiers and is validated
+against the aljam3 metadata from day one. They build the connectivity that
+§8 needs for the (future) retirement of aljam3 — nothing aljam3-side is
+removed now.
+
+**Execution policy: pilot first.** One book (صحيح مسلم, bkid 1161) goes
+through steps 1–14 end-to-end, locally AND on Railway, and its validation
+report is reviewed before the remaining 48 books are batch-processed.
+
+12. **Unitize** — `python ops\unitize_shamela.py --edition <id>`.
+    Segments the edition's pages into hadith units and writes `shamela_units`:
+    - A **unit starts** at a hadith-number line (`^\s*<digits>\s*[-–—]`, Arabic
+      or Latin digits — the same HNUM convention the neural indexing model and
+      the reader use). A **unit ends** at the next unit start or at a heading
+      line (the TOC grammar from `ops\build_shamela_toc.py` is reused for
+      heading detection). Units may span page boundaries: pages without a new
+      HNUM/heading extend the open unit.
+    - **`hadith_seq`** — sequential number 1..N per book in reading order.
+      This is the *unique per-book hadith number* (printed numbers can repeat
+      or be missing; `hadith_seq` never does).
+    - **`hadith_num`** — the printed number parsed from the text (validated
+      against the page `hno` metadata when present).
+    - **Global identifier** — `S<bkid>:<hadith_seq>` (bkid is stable across
+      environments and independent of serial database ids). Example:
+      `S1161:2530` = hadith unit 2530 of the Shamela صحيح مسلم.
+    - **`sanad_end_off`** — the sanad/matn boundary, taken from the neural
+      indexing model's `structure` spans (layer=`structure`,
+      engine=`neural-indexing`, v0.2: boundary ±2 words = 99.75%) when the
+      page has them; refreshed automatically as annotation coverage grows.
+      This is the field that later lets rāwī extraction run on Shamela units
+      exactly as it runs on aljam3 units.
+13. **Crosswalk to aljam3** — same script, automatic when the work has an
+    aljam3 edition with hadith numbers: every aljam3 unit is matched to a
+    Shamela unit by **printed hadith number + normalized-token overlap** of
+    the matn text, writing `unit_map(aljam3_passage_id → unit_id, bkid,
+    hadith_seq, method, confidence)`. The crosswalk is the permanent
+    traceability record (§8.2): aljam3 hadith → Shamela unit → printed
+    جزء/صفحة.
+14. **Validate** — the script prints a per-book report which must be reviewed
+    before the book is considered done:
+    - units found vs aljam3 unit count, printed-number coverage and duplicates;
+    - crosswalk coverage (% of aljam3 units matched) and confidence
+      distribution (high ≥ 0.6);
+    - sample mismatches for manual inspection.
+    Books where crosswalk coverage or overlap confidence is low are flagged
+    (wrong edition, numbering scheme differences) and resolved before batch
+    continuation.
+
+Environment note: `shamela_units`/`unit_map` are **rebuilt deterministically
+on each environment** (local, Railway) by re-running the script rather than
+copied by id — serial passage ids can differ between environments (the
+annotations push learned this the hard way), while (bkid, hadith_seq) and
+(source, source_book_id, seq) natural keys are stable everywhere.
+
 ## 6. Suggested load order
 
 0. Remove the redundant work 61 (شرح مشكل الآثار duplicate — §4.3 decision 1).
@@ -348,3 +405,6 @@ graph, not just duplicate text.
   project, and retire aljam3 book-by-book only when that book's crosswalk hits
   full coverage. Keep the crosswalk table permanently. Do not delete aljam3
   wholesale before the unit layer exists.
+
+
+

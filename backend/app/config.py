@@ -7,8 +7,10 @@ from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
 
 _ROOT = Path(__file__).resolve().parents[2]          # AdvancedHadith/
-load_dotenv(_ROOT / ".env.local")
-load_dotenv(_ROOT.parent / ".env")                   # shared keys (never committed)
+# utf-8-sig: tolerate a BOM (PowerShell "utf8" writes one; older python-dotenv
+# otherwise silently fails to parse the first key)
+load_dotenv(_ROOT / ".env.local", encoding="utf-8-sig")
+load_dotenv(_ROOT.parent / ".env", encoding="utf-8-sig")   # shared keys (never committed)
 
 
 class Settings(BaseSettings):
