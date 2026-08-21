@@ -12,7 +12,7 @@ const GRADE_AR: Record<string, string> = {
 export default function Analytics() {
   const { t } = useTranslation();
   const NARR_PAGE = 1000;
-  const PAIR_PAGE = 100;
+  const PAIR_PAGE = 1000;
   const [ov, setOv] = useState<any>(null);
   const [grades, setGrades] = useState<any>(null);
   const [narrators, setNarrators] = useState<{ total: number; items: any[]; page: number }>(

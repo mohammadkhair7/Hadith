@@ -87,11 +87,16 @@ export default function Search() {
           className="flex-1 min-w-[240px] border-2 border-islamic-teal rounded-xl px-4 py-2.5 font-arabic outline-none focus:border-islamic-gold"
         />
         <select value={mode} onChange={(e) => { setMode(e.target.value as any); setPage(0); }}
-          className="border rounded-xl px-3 text-sm">
-          <option value="keyword">{t("search_mode_keyword")}</option>
-          <option value="exact">{t("search_mode_exact")}</option>
-          <option value="semantic">{t("search_mode_semantic")}</option>
-          <option value="hybrid">{t("search_mode_hybrid")}</option>
+          className="border rounded-xl px-3 text-sm"
+          title={t(`search_hint_${mode}`) as string}>
+          <option value="keyword" title={t("search_hint_keyword") as string}>
+            {t("search_mode_keyword")}</option>
+          <option value="exact" title={t("search_hint_exact") as string}>
+            {t("search_mode_exact")}</option>
+          <option value="semantic" title={t("search_hint_semantic") as string}>
+            {t("search_mode_semantic")}</option>
+          <option value="hybrid" title={t("search_hint_hybrid") as string}>
+            {t("search_mode_hybrid")}</option>
         </select>
         <select value={source} onChange={(e) => { setSource(e.target.value); setPage(0); }}
           className="border rounded-xl px-3 text-sm">

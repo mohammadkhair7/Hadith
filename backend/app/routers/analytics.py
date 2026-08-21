@@ -31,7 +31,7 @@ def warm_cache() -> None:
     overview()
     grades(None)
     top_narrators(1000, 0)
-    top_pairs(100, 0)
+    top_pairs(1000, 0)
     chain_lengths()
     transmission_verbs(None)
     from .narrators import narrators_directory
@@ -158,7 +158,7 @@ def _top_pairs(limit: int, offset: int):
             GROUP BY 1, 2, 3, 4
             ORDER BY weight DESC, student_id, teacher_id
             LIMIT %s OFFSET %s
-        """, (min(limit, 200), max(offset, 0)))
+        """, (min(limit, 1000), max(offset, 0)))
     return {"total": total, "items": rows}
 
 
