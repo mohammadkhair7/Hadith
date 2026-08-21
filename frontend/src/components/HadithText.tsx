@@ -104,6 +104,23 @@ const HEADING_CLS: Record<string, string> = {
   h3: "font-bold text-deep-teal/90 mt-2 mb-1",
 };
 
+// Quran citations: ornate parentheses ﴿…﴾ or the shamela {…} convention.
+// Display-only decoration applied AFTER slicing — never affects offsets.
+const QURAN_RX = /(\uFD3F[^\uFD3E]{0,800}\uFD3E|\{[^{}]{0,800}\})/;
+
+function withQuran(s: string): React.ReactNode {
+  if (!s.includes("\uFD3F") && !s.includes("{")) return s;
+  const parts = s.split(QURAN_RX);
+  if (parts.length === 1) return s;
+  return parts.map((p, i) =>
+    p.startsWith("\uFD3F") || p.startsWith("{")
+      ? <span key={i} className="text-islamic-teal font-bold">{p}</span>
+      : p);
+}
+
+// hadith-number prefix at the start of a paragraph: «123 - …»
+const HNUM_RX = /^(\s*[\d\u0660-\u0669]+\s*[-–—]\s*)/;
+
 /** Markdown-style rendering of a page archive: heading lines become styled
  *  headings, runs of ordinary lines become paragraph blocks. Inside each
  *  paragraph the usual sanad/matn machinery applies (neural spans when
@@ -120,7 +137,7 @@ function FormattedPage({ raw, text, usingDiac, spans, fmt, focus, toggle }: {
 }) {
   const blocks = pageBlocks(raw);
   return (
-    <div className="arabic-text">
+    <div className="arabic-text leading-loose">
       {blocks.map((b, i) => {
         const from = usingDiac ? mapRawOffset(text, b.from) : b.from;
         const to = usingDiac ? mapRawOffset(text, b.to) : b.to;
@@ -154,7 +171,9 @@ function FormattedPage({ raw, text, usingDiac, spans, fmt, focus, toggle }: {
   );
 }
 
-/** One paragraph rendered with the marker heuristics (no neural spans). */
+/** One paragraph rendered with the marker heuristics (no neural spans).
+ *  A leading hadith number («123 - ») is styled separately; the sanad/matn
+ *  machinery runs on the remainder. */
 function ParaHeuristic({ slice, idx, fmt, focus, toggle }: {
   slice: string;
   idx: number;
@@ -162,19 +181,28 @@ function ParaHeuristic({ slice, idx, fmt, focus, toggle }: {
   focus: string;
   toggle: (key: string) => void;
 }) {
-  const starts = segmentHadiths(slice);
+  const num = HNUM_RX.exec(slice);
+  const body = num ? slice.slice(num[0].length) : slice;
+  const numNode = num
+    ? <span className="text-islamic-gold font-bold">{num[0]}</span>
+    : null;
+
+  const starts = segmentHadiths(body);
   if (starts.length === 0) {
-    const b = matnStart(slice);
+    const b = matnStart(body);
     return (
-      <HadithBlock text={slice} boundary={b} end={matnEnd(slice, b)} fmt={fmt}
-        focusKey={`b${idx}`} focus={focus} toggle={toggle} matnOnly={false} />
+      <>
+        {numNode}
+        <HadithBlock text={body} boundary={b} end={matnEnd(body, b)} fmt={fmt}
+          focusKey={`b${idx}`} focus={focus} toggle={toggle} matnOnly={false} />
+      </>
     );
   }
-  const intro = slice.slice(0, starts[0]);
-  const segs = starts.map((s, i) => slice.slice(s, starts[i + 1] ?? slice.length));
+  const intro = body.slice(0, starts[0]);
+  const segs = starts.map((s, i) => body.slice(s, starts[i + 1] ?? body.length));
   return (
     <div className="space-y-3">
-      {intro.trim() && <div>{fmt(intro)}</div>}
+      {(numNode || intro.trim()) && <div>{numNode}{withQuran(fmt(intro))}</div>}
       {segs.map((seg, i) => {
         const b = matnStart(seg);
         return (
@@ -216,7 +244,7 @@ function SpanText({ text, spans, fmt, focus, toggle, matnOnly, keyPrefix = "" }:
   const parts: React.ReactNode[] = [];
   let cursor = 0;
   mapped.forEach(([s, e, l], i) => {
-    if (s > cursor) parts.push(<span key={`g${i}`}>{fmt(text.slice(cursor, s))}</span>);
+    if (s > cursor) parts.push(<span key={`g${i}`}>{withQuran(fmt(text.slice(cursor, s)))}</span>);
     const seg = fmt(text.slice(Math.max(s, cursor), e));
     cursor = Math.max(cursor, e);
     if (l === "ISNAD") {
@@ -235,7 +263,7 @@ function SpanText({ text, spans, fmt, focus, toggle, matnOnly, keyPrefix = "" }:
           className={`cursor-pointer transition-colors ${focus === k
             ? "bg-islamic-gold/40 ring-2 ring-islamic-gold rounded px-0.5 box-decoration-clone"
             : "bg-islamic-gold/15 rounded px-0.5 box-decoration-clone"}`}>
-          {seg}
+          {withQuran(seg)}
         </span>);
     } else if (l === "HNUM") {
       parts.push(
@@ -246,10 +274,10 @@ function SpanText({ text, spans, fmt, focus, toggle, matnOnly, keyPrefix = "" }:
         <span key={`h${i}`}
           className="font-bold text-deep-teal">{seg}</span>);
     } else {
-      parts.push(<span key={`p${i}`}>{seg}</span>);
+      parts.push(<span key={`p${i}`}>{withQuran(seg)}</span>);
     }
   });
-  if (cursor < text.length) parts.push(<span key="tail">{fmt(text.slice(cursor))}</span>);
+  if (cursor < text.length) parts.push(<span key="tail">{withQuran(fmt(text.slice(cursor)))}</span>);
   return <div className="arabic-text whitespace-pre-wrap">{parts}</div>;
 }
 
@@ -264,9 +292,9 @@ function HadithBlock({ text, boundary, end, fmt, focusKey, focus, toggle, matnOn
   matnOnly: boolean;
 }) {
   const { t } = useTranslation();
-  if (boundary <= 0) return <span>{fmt(text)}</span>;
+  if (boundary <= 0) return <span>{withQuran(fmt(text))}</span>;
   const matnTo = end > boundary ? end : text.length;
-  if (matnOnly) return <span>{fmt(text.slice(boundary, matnTo))}</span>;
+  if (matnOnly) return <span>{withQuran(fmt(text.slice(boundary, matnTo)))}</span>;
 
   const sKey = `${focusKey}:sanad`;
   const mKey = `${focusKey}:matn`;
@@ -293,11 +321,11 @@ function HadithBlock({ text, boundary, end, fmt, focusKey, focus, toggle, matnOn
       <span className={`cursor-pointer transition-colors ${matnCls}`}
         title={t("click_highlight_matn")}
         onClick={() => toggle(mKey)}>
-        {fmt(text.slice(boundary, matnTo))}
+        {withQuran(fmt(text.slice(boundary, matnTo)))}
       </span>
       {matnTo < text.length && (
         <span className={other ? "text-gray-400" : "text-gray-600"}>
-          {fmt(text.slice(matnTo))}
+          {withQuran(fmt(text.slice(matnTo)))}
         </span>
       )}
     </>
