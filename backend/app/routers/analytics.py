@@ -187,6 +187,11 @@ def timeline():
 
 def _timeline():
     with db() as conn:
+        # graceful empty response until ops/analyze_timeline.py has run
+        if not q1(conn, "SELECT to_regclass('hadith_dates') AS t")["t"]:
+            return {"coverage": {"units": 0, "dated": 0, "exact_year": 0,
+                                 "windowed": 0, "season_only": 0, "seasonal": 0},
+                    "years": [], "events": [], "seasons": [], "companions": []}
         coverage = q1(conn, """
             SELECT
               (SELECT count(*) FROM passages WHERE kind='unit')      AS units,
