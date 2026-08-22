@@ -30,6 +30,7 @@ def warm_cache() -> None:
     """Prime the heavy corpus-wide aggregations (called from startup)."""
     overview()
     grades(None)
+    narrator_profile()
     top_narrators(1000, 0)
     top_pairs(1000, 0)
     chain_lengths()
@@ -95,6 +96,58 @@ def _grades(edition_id: int | None):
             SELECT source, count(*) AS n FROM hadith_grades GROUP BY source ORDER BY n DESC
         """)
     return {"distribution": dist, "by_source": by_source}
+
+
+@router.get("/narrator-profile")
+def narrator_profile():
+    """Narrator population by rijal grade (الدرجة) and tabaqa (الطبقة)."""
+    return _cached("narrator-profile", _narrator_profile)
+
+
+# canonical severity order for the grade chart (best → worst)
+_NGRADE_ORDER = ["sahabi", "thiqa", "saduq", "maqbul", "layyin",
+                 "daif", "majhul", "matruk", "kadhdhab", "other"]
+
+
+def _narrator_profile():
+    with db() as conn:
+        # rijal grades are free text from Taqrib (ثقه حافظ, صدوق يهم …);
+        # bucket them into the canonical categories. starts_with() avoids
+        # LIKE-% placeholders. Spellings follow normalize_arabic (ه for ة).
+        grades = q(conn, """
+            SELECT CASE
+                WHEN starts_with(g, 'صحابي') THEN 'sahabi'
+                WHEN starts_with(g, 'ثقه') OR starts_with(g, 'متفق')
+                     OR starts_with(g, 'امام') THEN 'thiqa'
+                WHEN starts_with(g, 'صدوق') OR starts_with(g, 'لا باس') THEN 'saduq'
+                WHEN starts_with(g, 'مقبول') THEN 'maqbul'
+                WHEN starts_with(g, 'لين') THEN 'layyin'
+                WHEN starts_with(g, 'ضعيف') THEN 'daif'
+                WHEN starts_with(g, 'مجهول') THEN 'majhul'
+                WHEN starts_with(g, 'متروك') THEN 'matruk'
+                WHEN starts_with(g, 'كذاب') THEN 'kadhdhab'
+                ELSE 'other' END AS bucket,
+                count(*) AS n
+            FROM (SELECT meta->>'rijal_grade' AS g FROM narrators
+                  WHERE meta->>'rijal_grade' IS NOT NULL) s
+            GROUP BY 1
+        """)
+        tabaqat = q(conn, r"""
+            SELECT (meta->>'tabaqa')::int AS tabaqa,
+                   mode() WITHIN GROUP (ORDER BY meta->>'tabaqa_label') AS label,
+                   count(*) AS n
+            FROM narrators
+            WHERE meta->>'tabaqa' ~ '^\d+$'
+            GROUP BY 1 ORDER BY 1
+        """)
+    order = {k: i for i, k in enumerate(_NGRADE_ORDER)}
+    grades.sort(key=lambda r: order.get(r["bucket"], 99))
+    return {
+        "grades": grades,
+        "graded_total": sum(r["n"] for r in grades),
+        "tabaqat": tabaqat,
+        "tabaqa_total": sum(r["n"] for r in tabaqat),
+    }
 
 
 @router.get("/top-narrators")

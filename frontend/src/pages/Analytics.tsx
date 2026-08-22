@@ -13,8 +13,10 @@ export default function Analytics() {
   const gradeLabel = (k: string) => t(`grade_${k}`, { defaultValue: k });
   const NARR_PAGE = 1000;
   const PAIR_PAGE = 1000;
+  const ngradeLabel = (k: string) => t(`ngrade_${k}`, { defaultValue: k });
   const [ov, setOv] = useState<any>(null);
   const [grades, setGrades] = useState<any>(null);
+  const [nprof, setNprof] = useState<any>(null);
   const [narrators, setNarrators] = useState<{ total: number; items: any[]; page: number }>(
     { total: 0, items: [], page: 0 });
   const [pairs, setPairs] = useState<{ total: number; items: any[]; page: number }>(
@@ -52,6 +54,7 @@ export default function Analytics() {
     setFailed(false);
     api("/analytics/overview").then(setOv).catch(() => setFailed(true));
     api("/analytics/grades").then(setGrades).catch(() => {});
+    api("/analytics/narrator-profile").then(setNprof).catch(() => {});
     loadNarrators(0);
     loadPairs(0);
     api("/analytics/chain-lengths").then(setLengths).catch(() => {});
@@ -102,6 +105,33 @@ export default function Analytics() {
             }}>
             <BarChart data={grades.distribution.map((g: any) => ({
               label: gradeLabel(g.grade_norm), value: g.n }))} />
+          </Section>
+        )}
+
+        {/* narrators by rijal grade (الدرجة) */}
+        {nprof?.grades?.length > 0 && (
+          <Section title={`${t("an_narr_grades")} (${nprof.graded_total.toLocaleString("en")})`}
+            exp={{
+              title: t("an_narr_grades"),
+              csv: () => [[t("an_grade"), t("an_count")],
+                ...nprof.grades.map((g: any) => [ngradeLabel(g.bucket), g.n])],
+            }}>
+            <BarChart data={nprof.grades.map((g: any) => ({
+              label: ngradeLabel(g.bucket), value: g.n }))} />
+          </Section>
+        )}
+
+        {/* narrators by tabaqa (الطبقة) */}
+        {nprof?.tabaqat?.length > 0 && (
+          <Section title={`${t("an_narr_tabaqat")} (${nprof.tabaqa_total.toLocaleString("en")})`}
+            exp={{
+              title: t("an_narr_tabaqat"),
+              csv: () => [[t("an_tabaqa"), t("an_count")],
+                ...nprof.tabaqat.map((r: any) => [`${r.tabaqa} — ${r.label}`, r.n])],
+            }}>
+            <BarChart labelW="w-40"
+              data={nprof.tabaqat.map((r: any) => ({
+                label: `${r.tabaqa} · ${r.label}`, value: r.n }))} />
           </Section>
         )}
 
@@ -290,13 +320,17 @@ function Section({ title, exp, children }: {
   );
 }
 
-function BarChart({ data }: { data: { label: string; value: number }[] }) {
+function BarChart({ data, labelW = "w-20" }: {
+  data: { label: string; value: number }[]; labelW?: string;
+}) {
   const max = Math.max(...data.map((d) => d.value), 1);
   return (
     <div className="bg-white rounded-xl shadow p-4 space-y-2">
       {data.map((d, i) => (
         <div key={i} className="flex items-center gap-2 text-sm">
-          <span className="w-20 font-arabic text-end shrink-0">{d.label}</span>
+          <span className={`${labelW} font-arabic text-end shrink-0 text-xs leading-tight`}>
+            {d.label}
+          </span>
           <div className="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden" dir="ltr">
             <div className="h-5 rounded-full flex items-center justify-end pe-2 text-[10px] text-white font-bold"
               style={{ width: `${Math.max((d.value / max) * 100, 4)}%`, background: NEON[i % NEON.length] }}>
