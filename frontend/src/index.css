@@ -70,6 +70,16 @@ body {
 .dark .bg-red-50 {
   background-color: #3d2030;
 }
+/* islamic-teal text is too dark against dark cards; deep-teal text is NOT
+   remapped globally because it sits on gold badges — components that use it
+   on dark surfaces carry explicit dark: variants instead */
+.dark .text-islamic-teal {
+  color: #45c4cb;
+}
+/* matn highlight: dark text works on the light gold wash in light mode only */
+.dark mark {
+  color: inherit;
+}
 .dark .bg-islamic-teal\/5:hover,
 .dark .hover\:bg-islamic-teal\/5:hover {
   background-color: rgba(13, 115, 119, 0.2);
@@ -97,6 +107,61 @@ mark {
 }
 .legacy-content a {
   color: var(--islamic-teal);
+}
+
+/* Markdown answer panel (اسأل الموسوعة) — styles for the LLM's markdown */
+.md-answer h1,
+.md-answer h2,
+.md-answer h3 {
+  @apply font-bold text-deep-teal mt-4 mb-2;
+}
+.dark .md-answer h1,
+.dark .md-answer h2,
+.dark .md-answer h3 {
+  color: #99f6e4;
+}
+.md-answer h2 {
+  @apply text-lg border-b border-islamic-gold/40 pb-1;
+}
+.md-answer p {
+  @apply my-2 leading-loose;
+}
+.md-answer ul,
+.md-answer ol {
+  @apply my-2 ps-6 space-y-1;
+}
+.md-answer ul {
+  list-style: disc;
+}
+.md-answer ol {
+  list-style: arabic-indic;
+}
+.md-answer blockquote {
+  @apply border-s-4 border-islamic-gold bg-islamic-gold/10 rounded-sm ps-4 pe-2 py-2 my-3;
+}
+.md-answer strong {
+  @apply text-deep-teal;
+}
+.dark .md-answer strong {
+  color: #fcd34d;
+}
+.md-answer table {
+  @apply my-3 text-sm;
+  border-collapse: collapse;
+}
+.md-answer th,
+.md-answer td {
+  @apply border border-islamic-teal/30 px-3 py-1.5;
+}
+.md-answer th {
+  @apply bg-islamic-teal/10 font-bold;
+}
+.md-answer hr {
+  @apply my-4 border-islamic-gold/40;
+}
+.md-answer a {
+  color: var(--islamic-teal);
+  text-decoration: underline;
 }
 
 /* thin scrollbars for the TOC sidebar */

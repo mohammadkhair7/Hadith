@@ -1,6 +1,8 @@
 import { FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
+import ReactMarkdown from "react-markdown";
 import { Link } from "react-router-dom";
+import remarkGfm from "remark-gfm";
 import { api } from "../api";
 import ExportBar from "./ExportBar";
 
@@ -67,7 +69,9 @@ export default function AskPanel({ initialQ = "" }: { initialQ?: string }) {
                   (c: any, i: number) => `[${i + 1}] ${c.work_title}${c.hadith_num ? " #" + c.hadith_num : ""}`
                 ).join("\n")}`} />
             </div>
-            <div className="arabic-text whitespace-pre-wrap">{res.answer}</div>
+            <div className="arabic-text md-answer">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{res.answer}</ReactMarkdown>
+            </div>
           </div>
 
           {res.sql && (

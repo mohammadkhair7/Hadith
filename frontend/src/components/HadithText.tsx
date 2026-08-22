@@ -99,9 +99,9 @@ export default function HadithText({ raw, diac, sanadEndRaw, spans, formatted, p
 }
 
 const HEADING_CLS: Record<string, string> = {
-  h1: "font-bold text-xl text-deep-teal border-b border-islamic-gold/40 pb-1 mt-4 mb-2",
-  h2: "font-bold text-lg text-islamic-teal mt-3 mb-1",
-  h3: "font-bold text-deep-teal/90 mt-2 mb-1",
+  h1: "font-bold text-xl text-deep-teal dark:text-teal-200 border-b border-islamic-gold/40 pb-1 mt-4 mb-2",
+  h2: "font-bold text-lg text-islamic-teal dark:text-teal-300 mt-3 mb-1",
+  h3: "font-bold text-deep-teal/90 dark:text-teal-200/90 mt-2 mb-1",
 };
 
 // Quran citations: ornate parentheses ﴿…﴾ or the shamela {…} convention.
@@ -252,7 +252,7 @@ function SpanText({ text, spans, fmt, focus, toggle, matnOnly, keyPrefix = "" }:
       parts.push(
         <span key={k} onClick={() => toggle(k)} title={t("click_highlight_sanad")}
           className={`cursor-pointer transition-colors ${focus === k
-            ? "bg-islamic-teal/20 text-deep-teal ring-2 ring-islamic-teal rounded px-0.5 box-decoration-clone"
+            ? "bg-islamic-teal/20 text-deep-teal dark:text-teal-100 ring-2 ring-islamic-teal rounded px-0.5 box-decoration-clone"
             : "text-gray-500"}`}>
           {seg}
         </span>);
@@ -272,7 +272,7 @@ function SpanText({ text, spans, fmt, focus, toggle, matnOnly, keyPrefix = "" }:
     } else if (l === "HEADING") {
       parts.push(
         <span key={`h${i}`}
-          className="font-bold text-deep-teal">{seg}</span>);
+          className="font-bold text-deep-teal dark:text-teal-200">{seg}</span>);
     } else {
       parts.push(<span key={`p${i}`}>{withQuran(seg)}</span>);
     }
@@ -301,7 +301,7 @@ function HadithBlock({ text, boundary, end, fmt, focusKey, focus, toggle, matnOn
   const other = focus && focus.startsWith(`${focusKey}:`);
   const sanadCls =
     focus === sKey
-      ? "bg-islamic-teal/20 text-deep-teal ring-2 ring-islamic-teal rounded px-0.5 box-decoration-clone"
+      ? "bg-islamic-teal/20 text-deep-teal dark:text-teal-100 ring-2 ring-islamic-teal rounded px-0.5 box-decoration-clone"
       : other
         ? "text-gray-400"
         : "text-gray-500";
