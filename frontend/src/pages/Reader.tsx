@@ -75,6 +75,20 @@ export default function Reader() {
       </aside>
 
       <div className="flex-1 min-w-0">
+        {/* mobile: the sidebar TOC is hidden, offer it as a collapsible block */}
+        {roots.length > 0 && (
+          <details className="md:hidden bg-white rounded-xl shadow mb-4">
+            <summary className="p-3 font-bold text-islamic-teal cursor-pointer select-none">
+              {t("reader_toc")}
+            </summary>
+            <div className="px-3 pb-3 max-h-[50vh] overflow-y-auto toc-scroll">
+              {roots.map((n) => (
+                <TocBranch key={n.toc_node_id} node={n} editionId={editionId!} gotoSeq={gotoSeq}
+                  defaultOpen={false} />
+              ))}
+            </div>
+          </details>
+        )}
         {edition && (
           <div className="bg-gradient-to-l from-deep-teal to-islamic-teal text-white rounded-xl p-4 mb-4 shadow">
             <h1 className="font-arabic font-bold text-xl">{edition.title_ar}</h1>

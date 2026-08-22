@@ -34,7 +34,7 @@ export default function AdminStatus() {
 
       <section className="mb-8">
         <h2 className="font-bold text-deep-teal mb-3">by source</h2>
-        <div className="bg-white rounded-xl shadow overflow-hidden">
+        <div className="bg-white rounded-xl shadow overflow-x-auto">
           <table className="w-full text-sm" dir="ltr">
             <thead className="bg-islamic-teal text-white">
               <tr><th className="p-2 text-left">source</th><th className="p-2 text-right">editions</th><th className="p-2 text-right">passages</th></tr>

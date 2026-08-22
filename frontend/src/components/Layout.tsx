@@ -8,6 +8,7 @@ export default function Layout() {
   const { t, i18n } = useTranslation();
   const nav = useNavigate();
   const [q, setQ] = useState("");
+  const [menuOpen, setMenuOpen] = useState(false);
   const [dark, setDark] = useState(() =>
     document.documentElement.classList.contains("dark"));
 
@@ -40,12 +41,20 @@ export default function Layout() {
   return (
     <div className="min-h-screen flex flex-col">
       <header className="bg-deep-teal text-islamic-light shadow-lg sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
-          <Link to="/" className="flex items-center gap-2">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center gap-2 sm:gap-3">
+          {/* hamburger: phones + small tablets get a collapsible menu */}
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-label="menu" aria-expanded={menuOpen}
+            className="lg:hidden text-2xl leading-none px-1 text-islamic-gold"
+          >
+            {menuOpen ? "✕" : "☰"}
+          </button>
+          <Link to="/" className="flex items-center gap-2" onClick={() => setMenuOpen(false)}>
             <span className="text-2xl text-islamic-gold">◈</span>
             <span className="font-bold text-lg">{t("app_title")}</span>
           </Link>
-          <nav className="flex items-center gap-1">
+          <nav className="hidden lg:flex items-center gap-1">
             <NavLink to="/" className={link} end>{t("nav_home")}</NavLink>
             <NavLink to="/books" className={link}>{t("nav_books")}</NavLink>
             <NavLink to="/search" className={link}>{t("nav_search")}</NavLink>
@@ -56,7 +65,9 @@ export default function Layout() {
             {isLoggedIn() && <NavLink to="/account" className={link}>{t("nav_account")}</NavLink>}
             {isLoggedIn() && <NavLink to="/admin" className={link}>{t("nav_admin")}</NavLink>}
           </nav>
-          <form onSubmit={submit} className="flex-1 min-w-[220px] max-w-xl">
+          {/* on phones the search box drops to its own full-width row */}
+          <form onSubmit={submit}
+            className="order-last w-full lg:order-none lg:w-auto lg:flex-1 lg:min-w-[220px] lg:max-w-xl">
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -64,6 +75,7 @@ export default function Layout() {
               className="w-full rounded-full px-4 py-2 text-sm text-islamic-dark outline-none ring-2 ring-transparent focus:ring-islamic-gold"
             />
           </form>
+          <span className="flex-1 lg:hidden" />
           <button
             onClick={switchTheme}
             title={dark ? t("theme_light") as string : t("theme_dark") as string}
@@ -90,6 +102,34 @@ export default function Layout() {
             </Link>
           )}
         </div>
+        {/* mobile navigation drawer */}
+        {menuOpen && (
+          <nav className="lg:hidden max-w-7xl mx-auto px-4 pb-3 flex flex-col gap-1 border-t border-islamic-teal/40 pt-2">
+            {([
+              ["/", t("nav_home"), true],
+              ["/books", t("nav_books"), false],
+              ["/search", t("nav_search"), false],
+              ["/subjects", t("nav_subjects"), false],
+              ["/narrators", t("nav_narrators"), false],
+              ["/analytics", t("nav_analytics"), false],
+              ["/timeline", t("nav_timeline"), false],
+              ...(isLoggedIn()
+                ? [["/account", t("nav_account"), false],
+                   ["/admin", t("nav_admin"), false]]
+                : []),
+            ] as [string, string, boolean][]).map(([to, label, end]) => (
+              <NavLink key={to} to={to} end={end}
+                onClick={() => setMenuOpen(false)}
+                className={({ isActive }) =>
+                  `px-3 py-2.5 rounded-md text-sm ${
+                    isActive
+                      ? "bg-islamic-teal text-white"
+                      : "text-islamic-light/90 hover:bg-islamic-teal/40"}`}>
+                {label}
+              </NavLink>
+            ))}
+          </nav>
+        )}
       </header>
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
         <Outlet />

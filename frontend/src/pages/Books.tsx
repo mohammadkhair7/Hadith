@@ -16,17 +16,17 @@ export default function Books() {
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
         <h1 className="text-2xl font-bold">{t("nav_books")}</h1>
         <input
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           placeholder="🔍"
-          className="border rounded-lg px-3 py-1.5 text-sm w-64"
+          className="border rounded-lg px-3 py-1.5 text-sm w-40 sm:w-64"
         />
         <span className="text-sm text-gray-500">{filtered.length}</span>
       </div>
-      <div className="bg-white rounded-xl shadow overflow-hidden">
+      <div className="bg-white rounded-xl shadow overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-deep-teal text-islamic-light">
             <tr>

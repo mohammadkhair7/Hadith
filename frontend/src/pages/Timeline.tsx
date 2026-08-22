@@ -57,8 +57,8 @@ export default function Timeline() {
         <h2 className="text-lg font-bold border-s-4 border-islamic-gold ps-3 mb-3">
           {t("tl_years_chart")}
         </h2>
-        <div className="bg-white rounded-xl shadow p-4">
-          <div className="flex items-end gap-1 h-48" dir="rtl">
+        <div className="bg-white rounded-xl shadow p-4 overflow-x-auto">
+          <div className="flex items-end gap-1 h-48 min-w-[560px]" dir="rtl">
             {propheticYears.map((y: any) => {
               const active = filter?.kind === "year" && filter.year === y.year;
               return (

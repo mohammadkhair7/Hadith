@@ -280,7 +280,7 @@ function Section({ title, exp, children }: {
 }) {
   return (
     <section>
-      <div className="flex items-center gap-3 mb-3">
+      <div className="flex items-center gap-3 mb-3 flex-wrap">
         <h2 className="text-lg font-bold border-s-4 border-islamic-gold ps-3">{title}</h2>
         {exp && <ExportBar title={exp.title} csv={exp.csv}
           text={() => exp.csv().map((r) => r.join("\t")).join("\n")} />}
