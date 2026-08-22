@@ -1,5 +1,6 @@
 /** Approved theme (ARCH §10.1, D12) */
 export default {
+  darkMode: "class",
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {

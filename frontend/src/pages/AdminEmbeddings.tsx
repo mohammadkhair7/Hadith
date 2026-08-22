@@ -23,6 +23,7 @@ export default function AdminEmbeddings() {
   const nav = useNavigate();
   const [rows, setRows] = useState<Row[]>([]);
   const [jobs, setJobs] = useState<any[]>([]);
+  const [staged, setStaged] = useState(0);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [mode, setMode] = useState<"skip" | "overwrite">("skip");
   const [error, setError] = useState("");
@@ -33,6 +34,7 @@ export default function AdminEmbeddings() {
       const r: any = await api("/admin/embeddings/coverage");
       setRows(r.editions);
       setJobs(r.jobs);
+      setStaged(r.staged ?? 0);
       return r.jobs;
     } catch (e: any) {
       setError(e.message);
@@ -72,6 +74,17 @@ export default function AdminEmbeddings() {
     }
   }
 
+  async function importStaged() {
+    setError("");
+    try {
+      await api("/admin/embeddings/import-staged", { method: "POST" });
+      await load();
+      startPolling();
+    } catch (e: any) {
+      setError(e.message);
+    }
+  }
+
   async function cancel(jobId: string) {
     await api(`/admin/embeddings/jobs/${jobId}/cancel`, { method: "POST" }).catch(() => {});
     load();
@@ -102,6 +115,13 @@ export default function AdminEmbeddings() {
           className="bg-islamic-teal text-white rounded-lg px-5 py-1.5 text-sm disabled:opacity-30 hover:bg-deep-teal">
           Run embedding job
         </button>
+        {staged > 0 && (
+          <button onClick={importStaged} disabled={!!running}
+            className="bg-islamic-gold text-deep-teal rounded-lg px-5 py-1.5 text-sm font-bold disabled:opacity-30"
+            title="vectors staged in Postgres by ops/railway_push_vectors.py — imports them into this environment's Redis (no API cost)">
+            Import {staged.toLocaleString("en")} staged vectors
+          </button>
+        )}
         <span className="text-xs text-gray-400" dir="ltr">
           embedding is <b>per page</b> (each page split into ≤1,500-char chunks), not per word —
           cost estimated at gemini-embedding-001 (768-d) rates, $0.15 / 1M input tokens; never automatic

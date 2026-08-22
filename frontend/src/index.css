@@ -13,6 +13,10 @@
 
 html {
   scroll-behavior: smooth;
+  color-scheme: light;
+}
+html.dark {
+  color-scheme: dark;
 }
 
 body {
@@ -21,6 +25,54 @@ body {
 
 .dark body {
   @apply bg-islamic-dark text-islamic-light;
+}
+
+/* Dark theme: global remaps so every page (cards are bg-white throughout)
+   renders consistently without per-component dark: classes. The header and
+   footer are deep-teal in BOTH themes — the top bar never changes. */
+.dark .bg-white {
+  background-color: #1f2447;
+}
+.dark .bg-gray-50,
+.dark .bg-gray-100,
+.dark .bg-gray-200 {
+  background-color: #272d55;
+}
+.dark .bg-islamic-light {
+  background-color: #14172b;
+}
+.dark .text-islamic-dark {
+  color: #f8f9fa;
+}
+.dark .text-gray-700,
+.dark .text-gray-600,
+.dark .text-gray-500 {
+  color: #b9bfd6;
+}
+.dark .text-gray-400,
+.dark .text-gray-300 {
+  color: #8d94b3;
+}
+.dark .border,
+.dark .border-b,
+.dark .border-t,
+.dark .border-s,
+.dark .border-e {
+  border-color: #3a4170;
+}
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: #272d55;
+  color: #f8f9fa;
+  border-color: #3a4170;
+}
+.dark .bg-red-50 {
+  background-color: #3d2030;
+}
+.dark .bg-islamic-teal\/5:hover,
+.dark .hover\:bg-islamic-teal\/5:hover {
+  background-color: rgba(13, 115, 119, 0.2);
 }
 
 .arabic-text {

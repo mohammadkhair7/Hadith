@@ -40,8 +40,16 @@ export default function Account() {
           {favs.map((f) => (
             <div key={f.item_id} className="bg-white rounded-lg p-3 shadow flex items-center gap-3">
               <Link to={`/passage/${f.ref?.passage_id}`}
-                className="flex-1 text-islamic-teal hover:underline text-sm">
-                {f.title || `#${f.ref?.passage_id}`}
+                className="flex-1 text-sm min-w-0 group">
+                <span className="text-islamic-teal group-hover:underline font-bold">
+                  {f.passage?.work_title || f.title || `#${f.ref?.passage_id}`}
+                  {f.passage?.hadith_num && ` — ${f.passage.hadith_num}`}
+                </span>
+                {f.passage?.snippet && (
+                  <span className="block font-arabic text-gray-600 truncate mt-0.5">
+                    {f.passage.snippet}…
+                  </span>
+                )}
               </Link>
               <button onClick={() => remove(f.item_id)} className="text-red-400 hover:text-red-600">✕</button>
             </div>
@@ -59,8 +67,14 @@ export default function Account() {
             <div key={n.item_id} className="bg-white rounded-lg p-3 shadow flex items-start gap-3">
               <div className="flex-1 text-sm">
                 <Link to={`/passage/${n.ref?.passage_id}`} className="text-islamic-teal hover:underline">
-                  #{n.ref?.passage_id}
+                  {n.passage?.work_title || `#${n.ref?.passage_id}`}
+                  {n.passage?.hadith_num && ` — ${n.passage.hadith_num}`}
                 </Link>
+                {n.passage?.snippet && (
+                  <span className="block font-arabic text-gray-400 text-xs truncate">
+                    {n.passage.snippet}…
+                  </span>
+                )}
                 <p className="font-arabic mt-1">{n.body}</p>
               </div>
               <button onClick={() => remove(n.item_id)} className="text-red-400 hover:text-red-600">✕</button>

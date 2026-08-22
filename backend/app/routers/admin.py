@@ -190,14 +190,15 @@ EMBED_USD_PER_MTOK = 0.15
 
 @router.get("/embeddings/coverage")
 def embeddings_coverage(user: dict = Depends(admin_user)):
-    from ..services.embed_jobs import coverage, list_jobs
+    from ..services.embed_jobs import coverage, list_jobs, staged_count
     with db() as conn:
         rows = coverage(conn)
+        staged = staged_count(conn)
     # rough cost estimate: Arabic ≈ 2.5 chars/token
     for r in rows:
         r["est_tokens_total"] = int((r["total_chars"] or 0) / 2.5)
         r["est_cost_usd"] = round(r["est_tokens_total"] / 1e6 * EMBED_USD_PER_MTOK, 4)
-    return {"editions": rows, "jobs": list_jobs(),
+    return {"editions": rows, "jobs": list_jobs(), "staged": staged,
             "price_usd_per_mtok": EMBED_USD_PER_MTOK}
 
 
@@ -212,6 +213,19 @@ def start_embedding_job(body: EmbJobBody, user: dict = Depends(admin_user)):
         raise HTTPException(409, "another embedding job is already running")
     job_id = start_job(body.edition_ids, body.mode, started_by=user["email"])
     return {"job_id": job_id}
+
+
+@router.post("/embeddings/import-staged")
+def import_staged_vectors(user: dict = Depends(admin_user)):
+    """Move vectors staged in Postgres (vector_stage) into this environment's
+    Redis. Used to publish locally computed embeddings to production."""
+    from ..services.embed_jobs import list_jobs, staged_count, start_import_staged
+    if any(j["status"] == "running" for j in list_jobs()):
+        raise HTTPException(409, "another embedding job is already running")
+    with db() as conn:
+        if not staged_count(conn):
+            raise HTTPException(400, "no staged vectors — run ops/railway_push_vectors.py first")
+    return {"job_id": start_import_staged(started_by=user["email"])}
 
 
 @router.get("/embeddings/jobs/{job_id}")

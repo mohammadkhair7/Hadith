@@ -8,12 +8,21 @@ export default function Layout() {
   const { t, i18n } = useTranslation();
   const nav = useNavigate();
   const [q, setQ] = useState("");
+  const [dark, setDark] = useState(() =>
+    document.documentElement.classList.contains("dark"));
 
   function switchLang() {
     const next = i18n.language === "ar" ? "en" : "ar";
     i18n.changeLanguage(next);
     localStorage.setItem("lang", next);
     applyDir(next);
+  }
+
+  function switchTheme() {
+    const next = !dark;
+    setDark(next);
+    document.documentElement.classList.toggle("dark", next);
+    localStorage.setItem("theme", next ? "dark" : "light");
   }
 
   function submit(e: FormEvent) {
@@ -55,6 +64,13 @@ export default function Layout() {
               className="w-full rounded-full px-4 py-2 text-sm text-islamic-dark outline-none ring-2 ring-transparent focus:ring-islamic-gold"
             />
           </form>
+          <button
+            onClick={switchTheme}
+            title={dark ? t("theme_light") as string : t("theme_dark") as string}
+            className="px-2.5 py-1.5 rounded-full border border-islamic-gold text-islamic-gold text-sm hover:bg-islamic-gold hover:text-deep-teal transition-colors"
+          >
+            {dark ? "☀" : "☾"}
+          </button>
           <button
             onClick={switchLang}
             className="px-3 py-1.5 rounded-full border border-islamic-gold text-islamic-gold text-sm hover:bg-islamic-gold hover:text-deep-teal transition-colors"

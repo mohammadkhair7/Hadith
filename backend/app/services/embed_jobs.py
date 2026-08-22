@@ -150,6 +150,96 @@ def _embed_edition(j: dict, edition_id: int) -> None:
         time.sleep(0.2)          # gentle rate limiting
 
 
+def staged_count(conn) -> int:
+    """Rows waiting in vector_stage (pushed from another environment), 0 if none."""
+    if not conn.execute("SELECT to_regclass('vector_stage') AS t").fetchone()["t"]:
+        return 0
+    return conn.execute("SELECT count(*) AS n FROM vector_stage").fetchone()["n"]
+
+
+def start_import_staged(started_by: str = "") -> str:
+    """Import vectors staged in Postgres (ops/railway_push_vectors.py) into
+    THIS environment's Redis — used to publish locally computed embeddings to
+    production, whose Redis is unreachable from outside the Railway network."""
+    job_id = uuid.uuid4().hex[:12]
+    _jobs[job_id] = {
+        "job_id": job_id, "edition_ids": [], "mode": "import-staged",
+        "status": "running", "done_chunks": 0, "total_chunks": None,
+        "done_passages": 0, "errors": 0, "cancel": False,
+        "started_by": started_by,
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "finished_at": None, "error": None, "current_edition": None,
+    }
+    t = threading.Thread(target=_run_import, args=(job_id,), daemon=True)
+    t.start()
+    return job_id
+
+
+def _run_import(job_id: str) -> None:
+    from .vector import emb_key, rconn
+    j = _jobs[job_id]
+    try:
+        ensure_index()
+        with pool.connection() as conn:
+            n = staged_count(conn)
+        if not n:
+            raise RuntimeError("vector_stage is empty — run ops/railway_push_vectors.py first")
+        j["total_chunks"] = n
+        r = rconn()
+        last = (-1, -1, -1)          # keyset pagination
+        while not j["cancel"]:
+            with pool.connection() as conn:
+                rows = conn.execute("""
+                    SELECT edition_id, passage_id, chunk_no, work_id, kind,
+                           source, hadith_num, content_hash, vec
+                    FROM vector_stage
+                    WHERE (edition_id, passage_id, chunk_no) > (%s, %s, %s)
+                    ORDER BY edition_id, passage_id, chunk_no
+                    LIMIT 5000
+                """, last).fetchall()
+            if not rows:
+                break
+            pipe = r.pipeline(transaction=False)
+            for row in rows:
+                pipe.hset(emb_key(row["edition_id"], row["passage_id"],
+                                  row["chunk_no"]), mapping={
+                    "vec": bytes(row["vec"]),
+                    "passage_id": row["passage_id"],
+                    "edition_id": row["edition_id"],
+                    "work_id": row["work_id"],
+                    "chunk_no": row["chunk_no"],
+                    "kind": row["kind"],
+                    "source": row["source"],
+                    "hadith_num": row["hadith_num"] or "",
+                    "content_hash": row["content_hash"],
+                })
+            pipe.execute()
+            with pool.connection() as conn:
+                conn.cursor().executemany("""
+                    INSERT INTO embedding_jobs (passage_id, chunk_no, edition_id,
+                                                content_hash, status, embedded_at)
+                    VALUES (%s,%s,%s,%s,'embedded', now())
+                    ON CONFLICT (passage_id, chunk_no)
+                    DO UPDATE SET content_hash=EXCLUDED.content_hash,
+                                  status='embedded', embedded_at=now()
+                """, [(row["passage_id"], row["chunk_no"], row["edition_id"],
+                       row["content_hash"]) for row in rows])
+                conn.commit()
+            j["done_chunks"] += len(rows)
+            last = (rows[-1]["edition_id"], rows[-1]["passage_id"],
+                    rows[-1]["chunk_no"])
+        if not j["cancel"]:
+            with pool.connection() as conn:
+                conn.execute("DROP TABLE IF EXISTS vector_stage")
+                conn.commit()
+        j["status"] = "cancelled" if j["cancel"] else "done"
+    except Exception as e:
+        j["status"] = "failed"
+        j["error"] = f"{type(e).__name__}: {e}"
+    finally:
+        j["finished_at"] = datetime.now(timezone.utc).isoformat()
+
+
 def _mark(edition_id: int, batch: list, status: str) -> None:
     with pool.connection() as conn:
         conn.cursor().executemany("""

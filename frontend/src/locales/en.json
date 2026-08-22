@@ -24,6 +24,8 @@
   "nav_admin": "Admin",
   "login": "Login",
   "logout": "Logout",
+  "theme_dark": "Dark mode",
+  "theme_light": "Light mode",
   "register": "Register",
   "email": "Email",
   "password": "Password",
