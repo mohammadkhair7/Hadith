@@ -5,12 +5,12 @@ import { api } from "../api";
 import ExportBar from "../components/ExportBar";
 
 const NEON = ["#10b981", "#3b82f6", "#facc15", "#22d3ee", "#ec4899", "#8b5cf6", "#f59e0b", "#ef4444"];
-const GRADE_AR: Record<string, string> = {
-  sahih: "صحيح", hasan: "حسن", maqbul: "مقبول", daif: "ضعيف", mawdu: "موضوع", other: "أخرى",
-};
 
 export default function Analytics() {
   const { t } = useTranslation();
+  // grade keys are normalized English slugs (sahih, hasan_sahih, gharib…);
+  // show the full label in the active UI language
+  const gradeLabel = (k: string) => t(`grade_${k}`, { defaultValue: k });
   const NARR_PAGE = 1000;
   const PAIR_PAGE = 1000;
   const [ov, setOv] = useState<any>(null);
@@ -98,10 +98,10 @@ export default function Analytics() {
             exp={{
               title: t("an_grades"),
               csv: () => [[t("an_grade"), t("an_count")],
-                ...grades.distribution.map((g: any) => [GRADE_AR[g.grade_norm] || g.grade_norm, g.n])],
+                ...grades.distribution.map((g: any) => [gradeLabel(g.grade_norm), g.n])],
             }}>
             <BarChart data={grades.distribution.map((g: any) => ({
-              label: GRADE_AR[g.grade_norm] || g.grade_norm, value: g.n }))} />
+              label: gradeLabel(g.grade_norm), value: g.n }))} />
           </Section>
         )}
 

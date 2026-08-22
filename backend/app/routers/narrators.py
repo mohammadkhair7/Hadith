@@ -232,10 +232,37 @@ def get_narrator(narrator_id: int):
             WHERE narrator_id=%s LIMIT 30
         """, (narrator_id,))
         stats = q1(conn, """
-            SELECT count(DISTINCT chain_id) AS chains, count(*) AS mentions
-            FROM isnad_links WHERE narrator_id=%s
+            SELECT count(*) AS mentions,
+                   count(DISTINCT l.chain_id) AS chains,
+                   count(DISTINCT c.passage_id) AS hadiths,
+                   count(DISTINCT p.edition_id) AS books
+            FROM isnad_links l
+            JOIN isnad_chains c USING (chain_id)
+            JOIN passages p ON p.passage_id = c.passage_id
+            WHERE l.narrator_id=%s
         """, (narrator_id,))
         n.update(stats or {})
+        rel = q1(conn, """
+            SELECT (SELECT count(DISTINCT b.narrator_id)
+                      FROM isnad_links a
+                      JOIN isnad_links b ON b.chain_id=a.chain_id AND b.pos=a.pos+1
+                     WHERE a.narrator_id=%s AND b.narrator_id IS NOT NULL) AS teachers,
+                   (SELECT count(DISTINCT a.narrator_id)
+                      FROM isnad_links b
+                      JOIN isnad_links a ON a.chain_id=b.chain_id AND a.pos=b.pos-1
+                     WHERE b.narrator_id=%s AND a.narrator_id IS NOT NULL) AS students
+        """, (narrator_id, narrator_id))
+        n.update(rel or {})
+        n["top_books"] = q(conn, """
+            SELECT w.title_ar, count(DISTINCT c.passage_id) AS hadiths
+            FROM isnad_links l
+            JOIN isnad_chains c USING (chain_id)
+            JOIN passages p ON p.passage_id = c.passage_id
+            JOIN editions e USING (edition_id)
+            JOIN works w USING (work_id)
+            WHERE l.narrator_id=%s
+            GROUP BY w.title_ar ORDER BY hadiths DESC LIMIT 5
+        """, (narrator_id,))
     return n
 
 
@@ -329,6 +356,12 @@ def _neighbors(conn, ids: list[int], cap: int):
 
 
 def _node_details(conn, ids: list[int]):
+    """Graph node payload: identity + rijal facts + contribution statistics
+    (mentions, distinct hadiths, chains, books, teachers, students)."""
+    # the grouped self-joins tempt the planner into a parallel hash join whose
+    # shared-memory needs exceed small Docker /dev/shm; the indexed nested
+    # loop is fast for a graph-sized id set anyway
+    conn.execute("SET LOCAL max_parallel_workers_per_gather = 0")
     return q(conn, """
         SELECT n.narrator_id, n.canonical_ar AS name, n.generation, n.death_year_h,
                n.bio_summary,
@@ -337,13 +370,42 @@ def _node_details(conn, ids: list[int]):
                n.meta->>'tabaqa_label'  AS tabaqa_label,
                n.meta->'places'         AS places,
                n.meta->>'school'        AS school,
-               (SELECT count(*) FROM isnad_links l WHERE l.narrator_id=n.narrator_id) AS mentions,
-               (SELECT count(DISTINCT p.edition_id)
-                  FROM isnad_links l JOIN isnad_chains c USING (chain_id)
-                  JOIN passages p ON p.passage_id = c.passage_id
-                 WHERE l.narrator_id=n.narrator_id) AS books
-        FROM narrators n WHERE n.narrator_id = ANY(%s)
-    """, (ids,))
+               n.meta->>'src_book'      AS src_book,
+               n.meta->>'identity_note' AS identity_note,
+               coalesce(s.mentions, 0)  AS mentions,
+               coalesce(s.chains, 0)    AS chains,
+               coalesce(s.hadiths, 0)   AS hadiths,
+               coalesce(s.books, 0)     AS books,
+               coalesce(te.teachers, 0) AS teachers,
+               coalesce(st.students, 0) AS students
+        FROM narrators n
+        LEFT JOIN (
+            SELECT l.narrator_id, count(*) AS mentions,
+                   count(DISTINCT l.chain_id) AS chains,
+                   count(DISTINCT c.passage_id) AS hadiths,
+                   count(DISTINCT p.edition_id) AS books
+            FROM isnad_links l
+            JOIN isnad_chains c USING (chain_id)
+            JOIN passages p ON p.passage_id = c.passage_id
+            WHERE l.narrator_id = ANY(%s)
+            GROUP BY 1
+        ) s ON s.narrator_id = n.narrator_id
+        LEFT JOIN (
+            SELECT a.narrator_id, count(DISTINCT b.narrator_id) AS teachers
+            FROM isnad_links a
+            JOIN isnad_links b ON b.chain_id = a.chain_id AND b.pos = a.pos + 1
+            WHERE a.narrator_id = ANY(%s) AND b.narrator_id IS NOT NULL
+            GROUP BY 1
+        ) te ON te.narrator_id = n.narrator_id
+        LEFT JOIN (
+            SELECT b.narrator_id, count(DISTINCT a.narrator_id) AS students
+            FROM isnad_links b
+            JOIN isnad_links a ON a.chain_id = b.chain_id AND a.pos = b.pos - 1
+            WHERE b.narrator_id = ANY(%s) AND a.narrator_id IS NOT NULL
+            GROUP BY 1
+        ) st ON st.narrator_id = n.narrator_id
+        WHERE n.narrator_id = ANY(%s)
+    """, (ids, ids, ids, ids))
 
 
 def _name_tokens(name: str) -> list[str]:

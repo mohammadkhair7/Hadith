@@ -10,6 +10,8 @@ type GNode = {
   bio_summary?: string | null; rijal_grade?: string | null;
   tabaqa?: string | null; tabaqa_label?: string | null;
   places?: string[] | null; school?: string | null; books?: number;
+  chains?: number; hadiths?: number; teachers?: number; students?: number;
+  src_book?: string | null; identity_note?: string | null;
   x?: number; y?: number; vx?: number; vy?: number;
 };
 type GEdge = {
@@ -196,25 +198,42 @@ export default function Narrators() {
   }
 
   function nodeTip(n: GNode): ReactNode {
+    const nf = (v?: number) => (v || 0).toLocaleString("en");
     return (
       <>
         <div className="font-bold text-islamic-gold">{n.name}</div>
-        {n.rijal_grade && <div className="text-xs text-emerald-300">{n.rijal_grade}</div>}
+        {(n.rijal_grade || n.death_year_h) && (
+          <div className="text-xs">
+            {n.rijal_grade && <span className="text-emerald-300 font-bold">{n.rijal_grade}</span>}
+            {n.rijal_grade && n.death_year_h ? " · " : ""}
+            {n.death_year_h ? t("narrator_died", { y: n.death_year_h }) : ""}
+          </div>
+        )}
         {(n.tabaqa_label || n.generation) && (
           <div className="text-xs">{n.tabaqa_label || n.generation}
             {n.tabaqa ? ` (الطبقة ${n.tabaqa})` : ""}</div>
         )}
-        {n.death_year_h && <div className="text-xs">ت {n.death_year_h} هـ</div>}
         {n.places && n.places.length > 0 && (
           <div className="text-xs">{t("narrator_places")}: {n.places.join("، ")}</div>
         )}
         {n.school && <div className="text-xs">{t("narrator_school")}: {n.school}</div>}
-        <div className="text-xs opacity-80">
-          {n.mentions} {t("narrators_mentions")}
-          {n.books ? ` · ${n.books} ${t("an_books")}` : ""}
+        {n.identity_note && (
+          <div className="text-xs text-amber-300/90 mt-1">{n.identity_note}</div>
+        )}
+        {/* contribution statistics from the isnad knowledge base */}
+        <div className="text-xs mt-1 grid grid-cols-2 gap-x-3 border-t border-white/20 pt-1">
+          <span>{t("narrator_hadiths_n")}: <b>{nf(n.hadiths)}</b></span>
+          <span>{t("narrators_chains")}: <b>{nf(n.chains)}</b></span>
+          <span>{t("narrators_mentions")}: <b>{nf(n.mentions)}</b></span>
+          <span>{t("an_books")}: <b>{nf(n.books)}</b></span>
+          <span>{t("narrator_teachers")}: <b>{nf(n.teachers)}</b></span>
+          <span>{t("narrator_students")}: <b>{nf(n.students)}</b></span>
         </div>
-        {n.bio_summary && (
+        {n.bio_summary && !n.identity_note && (
           <div className="text-xs opacity-70 mt-1 line-clamp-3">{n.bio_summary}</div>
+        )}
+        {n.src_book && (
+          <div className="text-[10px] opacity-60">{t("narrator_source")}: {n.src_book}</div>
         )}
         <div className="text-xs opacity-60 mt-1">{t("narrators_click_expand")}</div>
       </>
@@ -356,22 +375,65 @@ export default function Narrators() {
               {selected.canonical_ar}
             </h2>
             <div className="text-sm space-y-1 mb-4">
-              <div>{t("narrators_chains")}: <b>{selected.chains}</b></div>
-              <div>{t("narrators_mentions")}: <b>{selected.mentions}</b></div>
               {selected.meta?.rijal_grade && (
-                <div className="text-emerald-700 font-arabic">{selected.meta.rijal_grade}</div>
+                <div className="text-emerald-700 font-arabic font-bold">
+                  {selected.meta.rijal_grade}
+                </div>
               )}
               {selected.meta?.tabaqa_label && (
                 <div className="font-arabic">{selected.meta.tabaqa_label}
                   {selected.meta.tabaqa ? ` (الطبقة ${selected.meta.tabaqa})` : ""}</div>
               )}
-              {selected.death_year_h && <div>ت {selected.death_year_h} هـ</div>}
+              {selected.death_year_h && (
+                <div>{t("narrator_died", { y: selected.death_year_h })}</div>
+              )}
               {selected.meta?.places?.length > 0 && (
                 <div className="font-arabic">{t("narrator_places")}: {selected.meta.places.join("، ")}</div>
+              )}
+              {selected.meta?.school && (
+                <div className="font-arabic">{t("narrator_school")}: {selected.meta.school}</div>
+              )}
+              {selected.meta?.identity_note && (
+                <div className="text-xs text-amber-800 bg-amber-50 border border-amber-300 rounded-lg p-2 font-arabic leading-relaxed">
+                  {selected.meta.identity_note}
+                </div>
+              )}
+              {/* contribution statistics */}
+              <div className="grid grid-cols-2 gap-1 text-xs bg-islamic-teal/10 rounded-lg p-2 mt-1">
+                <span>{t("narrator_hadiths_n")}: <b>{(selected.hadiths || 0).toLocaleString("en")}</b></span>
+                <span>{t("narrators_chains")}: <b>{(selected.chains || 0).toLocaleString("en")}</b></span>
+                <span>{t("narrators_mentions")}: <b>{(selected.mentions || 0).toLocaleString("en")}</b></span>
+                <span>{t("an_books")}: <b>{(selected.books || 0).toLocaleString("en")}</b></span>
+                <span>{t("narrator_teachers")}: <b>{(selected.teachers || 0).toLocaleString("en")}</b></span>
+                <span>{t("narrator_students")}: <b>{(selected.students || 0).toLocaleString("en")}</b></span>
+              </div>
+              {selected.top_books?.length > 0 && (
+                <div className="text-xs pt-1">
+                  <span className="font-bold">{t("narrator_top_books")}:</span>
+                  <span className="font-arabic">
+                    {" "}{selected.top_books.map((b: any) =>
+                      `${b.title_ar} (${b.hadiths.toLocaleString("en")})`).join("، ")}
+                  </span>
+                </div>
+              )}
+              {selected.assessments?.length > 0 && (
+                <div className="text-xs border-t pt-2 mt-2">
+                  <div className="font-bold mb-1">{t("narrator_assess")}</div>
+                  {selected.assessments.slice(0, 6).map((a: any, i: number) => (
+                    <div key={i} className="font-arabic">
+                      {a.critic ? `${a.critic}: ` : ""}{a.grade || a.quote}
+                    </div>
+                  ))}
+                </div>
               )}
               {selected.bio_summary && (
                 <div className="text-xs text-gray-500 font-arabic leading-relaxed border-t pt-2 mt-2">
                   {selected.bio_summary}
+                </div>
+              )}
+              {selected.meta?.src_book && (
+                <div className="text-[10px] text-gray-400">
+                  {t("narrator_source")}: {selected.meta.src_book}
                 </div>
               )}
             </div>
