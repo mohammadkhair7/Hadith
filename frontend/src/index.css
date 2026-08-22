@@ -70,10 +70,71 @@ body {
 .dark .bg-red-50 {
   background-color: #3d2030;
 }
-/* islamic-teal text is too dark against dark cards; deep-teal text is NOT
-   remapped globally because it sits on gold badges — components that use it
-   on dark surfaces carry explicit dark: variants instead */
+/* islamic-teal text is too dark against dark cards */
 .dark .text-islamic-teal {
+  color: #45c4cb;
+}
+/* deep-teal text (#14213d) is near-black: lighten it on dark surfaces —
+   EXCEPT on the bright gold / orange / green badges, where the element
+   carries the bg class itself and dark text must stay for contrast */
+.dark .text-deep-teal {
+  color: #99f6e4;
+}
+.dark .bg-islamic-gold.text-deep-teal,
+.dark .bg-orange-accent.text-deep-teal,
+.dark .bg-neon-green.text-deep-teal {
+  color: #14213d;
+}
+/* faint deep-teal washes vanish on dark cards — flip to a light wash */
+.dark .bg-deep-teal\/5,
+.dark .bg-deep-teal\/10 {
+  background-color: rgba(153, 246, 228, 0.1);
+}
+/* feedback colors: error / success / warning text and boxes */
+.dark .text-red-700,
+.dark .text-red-600 {
+  color: #fca5a5;
+}
+.dark .text-red-500 {
+  color: #f87171;
+}
+.dark .hover\:text-red-500:hover,
+.dark .hover\:text-red-600:hover {
+  color: #fca5a5;
+}
+.dark .bg-red-100 {
+  background-color: #4a2430;
+}
+.dark .text-emerald-700 {
+  color: #6ee7b7;
+}
+.dark .bg-emerald-50,
+.dark .bg-emerald-100 {
+  background-color: #1d3b33;
+}
+.dark .bg-amber-50 {
+  background-color: #3b3220;
+}
+.dark .text-amber-800 {
+  color: #fcd34d;
+}
+.dark .border-amber-300 {
+  border-color: #93752c;
+}
+.dark .hover\:bg-gray-200:hover {
+  background-color: #313866;
+}
+/* divide-y defaults to gray-200, invisible-noise on dark */
+.dark .divide-y > :not([hidden]) ~ :not([hidden]) {
+  border-color: #3a4170;
+}
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #8d94b3;
+}
+/* teal links are too dark on dark surfaces */
+.dark .md-answer a,
+.dark .legacy-content a {
   color: #45c4cb;
 }
 /* matn highlight: dark text works on the light gold wash in light mode only */
